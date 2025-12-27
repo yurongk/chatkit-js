@@ -6,13 +6,12 @@ import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatk
 import { cn } from '../lib/utils';
 import { useStreamContext } from '../providers/Stream';
 import { ComposerMenu } from './composer/ComposerMenu';
+import { SendButton } from './composer/SendButton';
 import { HistorySidebar } from './history/HistorySidebar';
 import { AssistantMessage } from './thread/messages/ai';
 import { MessageActions } from './thread/MessageActions';
 import { StartScreen } from './thread/StartScreen';
 // Avatar import removed - AI avatar disabled
-import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { useStreamManager } from '../hooks/useStream';
 import { useThreads } from '../hooks/useThreads';
@@ -677,7 +676,7 @@ export function Chat({
           </div>
         )}
 
-        <form className="flex items-end gap-2" onSubmit={handleSubmit}>
+        <form className="flex items-center gap-2" onSubmit={handleSubmit}>
           {/* Composer Menu (plus button) */}
           <ComposerMenu
             composer={composer}
@@ -687,49 +686,37 @@ export function Chat({
             disabled={stream.isLoading || missingConfig || isHistoryLoading}
           />
 
-          <div className="flex-1">
-            <Input
+          {/* Capsule-shaped input container */}
+          <div
+            className={cn(
+              'flex flex-1 items-center gap-2 rounded-full',
+              'bg-white border border-gray-200 shadow-sm',
+              'px-4 py-1.5',
+              'focus-within:border-gray-300 focus-within:shadow-md',
+              'transition-shadow duration-200'
+            )}
+          >
+            <input
+              type="text"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder={inputPlaceholder}
               disabled={stream.isLoading || missingConfig || isHistoryLoading}
-              className="min-h-10 resize-none bg-background"
+              className={cn(
+                'flex-1 bg-transparent text-sm outline-none',
+                'placeholder:text-gray-400',
+                'disabled:cursor-not-allowed disabled:opacity-50'
+              )}
               autoComplete="off"
             />
-          </div>
-          {stream.isLoading ? (
-            <Button
-              type="button"
-              size="icon"
-              onClick={() => stream.stop()}
-              className="h-10 w-10 shrink-0"
-            >
-              <span className="text-xs font-semibold">{t('chat.stop')}</span>
-            </Button>
-          ) : (
-            <Button
-              type="submit"
-              size="icon"
+            <SendButton
               disabled={isSendDisabled}
-              className="h-10 w-10 shrink-0"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-              </svg>
-              <span className="sr-only">{t('chat.send')}</span>
-            </Button>
-          )}
+              isLoading={stream.isLoading}
+              onStop={() => stream.stop()}
+              stopLabel={t('chat.stop')}
+              sendLabel={t('chat.send')}
+            />
+          </div>
         </form>
         <p className="mt-2 text-center text-xs text-muted-foreground">
           {t('chat.poweredBy')}
