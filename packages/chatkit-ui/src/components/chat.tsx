@@ -106,12 +106,16 @@ export function Chat({
   const { t } = useChatkitTranslation();
   const composer = options?.composer;
   const startScreen = options?.startScreen;
+  const history = options?.history;
+  const disclaimer = options?.disclaimer;
+  const threadItemActions = options?.threadItemActions;
   const {setStream} = useStreamManager();
   const stream = useStreamContext();
 
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
   const [historyError, setHistoryError] = React.useState<string | null>(null);
+  const [assistantName, setAssistantName] = React.useState<string | null>(null);
 
   // Minimum loading dots display time (ms)
   const LOADING_DOTS_MIN_DURATION = 800;
@@ -211,6 +215,21 @@ export function Chat({
     if (missingConfig) return;
     void refreshConversations();
   }, [missingConfig, refreshConversations]);
+
+  // Fetch assistant name from API
+  React.useEffect(() => {
+    if (missingConfig || !stream.client || !stream.assistantId) return;
+    stream.client.assistants
+      .get(stream.assistantId)
+      .then((assistant) => {
+        if (assistant?.name) {
+          setAssistantName(assistant.name);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Chat] Failed to load assistant info:', err);
+      });
+  }, [missingConfig, stream.client, stream.assistantId]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -449,18 +468,52 @@ export function Chat({
         <div className="flex items-center gap-3">
           <div className="h-2 w-2 rounded-full bg-green-500"></div>
           <div>
-            <h2 className="text-lg font-semibold">{resolvedTitle}</h2>
+            <h2 className="text-lg font-semibold">{assistantName || resolvedTitle}</h2>
             <p className="text-xs text-muted-foreground">{t('chat.statusOnline')}</p>
           </div>
         </div>
-        <HistorySidebar
-          conversations={conversations}
-          currentConversationId={activeConversationId ?? undefined}
-          onNewConversation={handleNewConversation}
-          onSelectConversation={handleSelectConversation}
-          onDeleteConversation={handleDeleteConversation}
-          disabled={missingConfig || stream.isLoading || isThreadsLoading || isHistoryLoading}
-        />
+        {/* History controls - only shown when history.enabled is true (default) */}
+        {(history?.enabled !== false) && (
+          <div className="flex items-center gap-1">
+            {/* New conversation button */}
+            <button
+              type="button"
+              onClick={handleNewConversation}
+              disabled={missingConfig || stream.isLoading || isHistoryLoading}
+              className={cn(
+                'flex h-9 w-9 items-center justify-center rounded-md',
+                'text-muted-foreground hover:text-foreground hover:bg-muted',
+                'transition-colors duration-150',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+              title={t('history.newConversation')}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </button>
+            <HistorySidebar
+              conversations={conversations}
+              currentConversationId={activeConversationId ?? undefined}
+              onNewConversation={handleNewConversation}
+              onSelectConversation={handleSelectConversation}
+              onDeleteConversation={handleDeleteConversation}
+              showDelete={history?.showDelete !== false}
+              disabled={missingConfig || stream.isLoading || isThreadsLoading || isHistoryLoading}
+            />
+          </div>
+        )}
       </div>
 
       <ScrollArea ref={scrollAreaRef} className="flex-1">
@@ -522,7 +575,7 @@ export function Chat({
                             ? 'bg-primary text-primary-foreground px-4 py-2.5'
                             : message.type === 'system'
                               ? 'bg-muted text-muted-foreground text-xs px-4 py-2.5'
-                              : 'py-1',  // AI messages: minimal padding, no background
+                              : 'py-1 text-chat-foreground',  // AI messages: use chat-specific foreground color
                         )}
                       >
                         {isAssistantMessage ? (
@@ -676,26 +729,25 @@ export function Chat({
           </div>
         )}
 
-        <form className="flex items-center gap-2" onSubmit={handleSubmit}>
-          {/* Composer Menu (plus button) */}
-          <ComposerMenu
-            composer={composer}
-            onAttachmentClick={handleAttachmentClick}
-            onToolSelect={handleToolSelect}
-            selectedTool={selectedTool}
-            disabled={stream.isLoading || missingConfig || isHistoryLoading}
-          />
-
+        <form className="flex items-center" onSubmit={handleSubmit}>
           {/* Capsule-shaped input container */}
           <div
             className={cn(
-              'flex flex-1 items-center gap-2 rounded-full',
-              'bg-white border border-gray-200 shadow-sm',
-              'px-4 py-1.5',
-              'focus-within:border-gray-300 focus-within:shadow-md',
+              'flex flex-1 items-center gap-1 rounded-full',
+              'bg-background border border-border shadow-sm',
+              'pl-1.5 pr-1.5 py-1',
+              'focus-within:border-muted-foreground/30 focus-within:shadow-md',
               'transition-shadow duration-200'
             )}
           >
+            {/* Plus button inside input - left side */}
+            <ComposerMenu
+              composer={composer}
+              onAttachmentClick={handleAttachmentClick}
+              onToolSelect={handleToolSelect}
+              selectedTool={selectedTool}
+              disabled={stream.isLoading || missingConfig || isHistoryLoading}
+            />
             <input
               type="text"
               value={draft}
@@ -703,8 +755,8 @@ export function Chat({
               placeholder={inputPlaceholder}
               disabled={stream.isLoading || missingConfig || isHistoryLoading}
               className={cn(
-                'flex-1 bg-transparent text-sm outline-none',
-                'placeholder:text-gray-400',
+                'flex-1 bg-transparent text-sm text-foreground outline-none px-2',
+                'placeholder:text-muted-foreground',
                 'disabled:cursor-not-allowed disabled:opacity-50'
               )}
               autoComplete="off"
@@ -718,6 +770,19 @@ export function Chat({
             />
           </div>
         </form>
+
+        {/* Disclaimer */}
+        {disclaimer?.text && (
+          <p
+            className={cn(
+              'mt-2 text-center text-xs',
+              disclaimer.highContrast ? 'text-foreground' : 'text-muted-foreground'
+            )}
+          >
+            {disclaimer.text}
+          </p>
+        )}
+
         <p className="mt-2 text-center text-xs text-muted-foreground">
           {t('chat.poweredBy')}
         </p>

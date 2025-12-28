@@ -24,6 +24,7 @@ export type HistorySidebarProps = {
   onNewConversation?: () => void;
   onSelectConversation?: (id: string) => void;
   onDeleteConversation?: (id: string) => void;
+  showDelete?: boolean;
   disabled?: boolean;
 };
 
@@ -114,6 +115,7 @@ export function HistorySidebar({
   onNewConversation,
   onSelectConversation,
   onDeleteConversation,
+  showDelete = true,
   disabled = false,
 }: HistorySidebarProps) {
   const { t } = useChatkitTranslation();
@@ -180,7 +182,7 @@ export function HistorySidebar({
                       <MessageIcon />
                     </span>
                     <span className="flex-1 truncate">{conversation.title}</span>
-                    {onDeleteConversation && (
+                    {showDelete && onDeleteConversation && (
                       <button
                         type="button"
                         onClick={(e) => {

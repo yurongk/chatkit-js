@@ -57,7 +57,7 @@ export function SendButton({
         onClick={onStop}
         className={cn(
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-          'bg-black text-white',
+          'bg-foreground text-background',
           'transition-transform duration-150 ease-out',
           'hover:scale-105 active:scale-95'
         )}
@@ -74,7 +74,7 @@ export function SendButton({
       disabled={disabled}
       className={cn(
         'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-        'bg-black text-white',
+        'bg-foreground text-background',
         'transition-all duration-150 ease-out',
         'hover:scale-105 active:scale-95',
         'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100'
