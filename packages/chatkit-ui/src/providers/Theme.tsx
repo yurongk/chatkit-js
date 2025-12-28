@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { ChatKitTheme } from '@xpert-ai/chatkit-types';
+import type { ChatKitTheme, GrayscaleOptions } from '@xpert-ai/chatkit-types';
 
 export interface ThemeProviderProps {
   children: React.ReactNode;
@@ -42,42 +42,115 @@ function getLuminance(hex: string): number {
 }
 
 /**
- * Convert hex color to HSL values string (without hsl() wrapper)
- * Returns format: "H S% L%" for CSS variable usage
+ * Convert hex color to OKLCH CSS color string
+ * Returns format: "oklch(L C H)" for CSS variable usage
+ * Uses proper sRGB → Linear RGB → OKLab → OKLCH conversion
  */
-function hexToHslValues(hex: string): string | null {
+function hexToOklch(hex: string): string | null {
   const rgb = hexToRgb(hex);
   if (!rgb) return null;
 
-  // Convert to 0-1 range
-  const r = rgb.r / 255;
-  const g = rgb.g / 255;
-  const b = rgb.b / 255;
+  // Convert sRGB to linear RGB
+  const toLinear = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
 
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h = 0;
-  let s = 0;
-  const l = (max + min) / 2;
+  const lr = toLinear(rgb.r);
+  const lg = toLinear(rgb.g);
+  const lb = toLinear(rgb.b);
 
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  // Convert linear RGB to OKLab using the proper matrix
+  // Step 1: Linear RGB to LMS
+  const l = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb;
+  const m = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb;
+  const s = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb;
 
-    switch (max) {
-      case r:
-        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-        break;
-      case g:
-        h = ((b - r) / d + 2) / 6;
-        break;
-      case b:
-        h = ((r - g) / d + 4) / 6;
-        break;
-    }
-  }
+  // Step 2: LMS to LMS' (cube root)
+  const l_ = Math.cbrt(l);
+  const m_ = Math.cbrt(m);
+  const s_ = Math.cbrt(s);
 
-  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+  // Step 3: LMS' to OKLab
+  const okL = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
+  const okA = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+  const okB = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+
+  // Step 4: OKLab to OKLCH
+  const okC = Math.sqrt(okA * okA + okB * okB);
+  const okH = Math.atan2(okB, okA) * (180 / Math.PI);
+  const normalizedH = okH < 0 ? okH + 360 : okH;
+
+  return `oklch(${okL.toFixed(3)} ${okC.toFixed(3)} ${normalizedH.toFixed(1)})`;
+}
+
+/**
+ * Convert HSL to RGB
+ */
+function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+  const sNorm = s / 100;
+  const lNorm = l / 100;
+
+  const c = (1 - Math.abs(2 * lNorm - 1)) * sNorm;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = lNorm - c / 2;
+
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+
+  return {
+    r: Math.round((r + m) * 255),
+    g: Math.round((g + m) * 255),
+    b: Math.round((b + m) * 255)
+  };
+}
+
+/**
+ * Convert RGB to OKLCH (helper function)
+ */
+function rgbToOklch(r: number, g: number, b: number): string {
+  // Convert sRGB to linear RGB
+  const toLinear = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+
+  const lr = toLinear(r);
+  const lg = toLinear(g);
+  const lb = toLinear(b);
+
+  // Convert linear RGB to OKLab
+  const l = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb;
+  const m = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb;
+  const s = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb;
+
+  const l_ = Math.cbrt(l);
+  const m_ = Math.cbrt(m);
+  const s_ = Math.cbrt(s);
+
+  const okL = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
+  const okA = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+  const okB = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+
+  const okC = Math.sqrt(okA * okA + okB * okB);
+  const okH = Math.atan2(okB, okA) * (180 / Math.PI);
+  const normalizedH = okH < 0 ? okH + 360 : okH;
+
+  return `oklch(${okL.toFixed(3)} ${okC.toFixed(3)} ${normalizedH.toFixed(1)})`;
+}
+
+/**
+ * Create OKLCH CSS color string from h, s, l components (HSL input)
+ * Converts HSL to RGB then to OKLCH for accurate conversion
+ */
+function hslToOklch(h: number, s: number, l: number): string {
+  const rgb = hslToRgb(h, s, l);
+  return rgbToOklch(rgb.r, rgb.g, rgb.b);
 }
 
 /**
@@ -96,6 +169,115 @@ function getRadiusValue(radius: string): string {
     default:
       return '0.5rem';
   }
+}
+
+/**
+ * Get density spacing multiplier
+ * compact: 0.75, normal: 1, spacious: 1.25
+ */
+function getDensitySpacing(density: 'compact' | 'normal' | 'spacious'): {
+  spacing: number;
+  padding: string;
+  gap: string;
+} {
+  switch (density) {
+    case 'compact':
+      return { spacing: 0.75, padding: '0.5rem', gap: '0.25rem' };
+    case 'spacious':
+      return { spacing: 1.25, padding: '1.5rem', gap: '1rem' };
+    case 'normal':
+    default:
+      return { spacing: 1, padding: '1rem', gap: '0.5rem' };
+  }
+}
+
+/**
+ * Generate grayscale color palette based on hue and tint
+ * This creates colors for muted, border, card, etc.
+ */
+function generateGrayscaleColors(
+  grayscale: GrayscaleOptions,
+  isDarkMode: boolean
+): Record<string, string> {
+  const { hue, tint } = grayscale;
+  // tint: 0-9, where 0 is pure gray and 9 is most colored
+  const saturation = tint * 3; // 0% to 27%
+
+  if (isDarkMode) {
+    // Dark mode: lighter backgrounds, darker text
+    return {
+      muted: hslToOklch(hue, saturation, 15),
+      'muted-foreground': hslToOklch(hue, saturation, 65),
+      border: hslToOklch(hue, saturation, 20),
+      card: hslToOklch(hue, saturation, 12),
+      'card-foreground': hslToOklch(hue, saturation, 95),
+      popover: hslToOklch(hue, saturation, 10),
+      'popover-foreground': hslToOklch(hue, saturation, 95),
+      secondary: hslToOklch(hue, saturation, 20),
+      'secondary-foreground': hslToOklch(hue, saturation, 95),
+    };
+  } else {
+    // Light mode: darker backgrounds, lighter text
+    return {
+      muted: hslToOklch(hue, saturation, 96),
+      'muted-foreground': hslToOklch(hue, saturation, 45),
+      border: hslToOklch(hue, saturation, 90),
+      card: hslToOklch(hue, saturation, 100),
+      'card-foreground': hslToOklch(hue, saturation, 10),
+      popover: hslToOklch(hue, saturation, 100),
+      'popover-foreground': hslToOklch(hue, saturation, 10),
+      secondary: hslToOklch(hue, saturation, 96),
+      'secondary-foreground': hslToOklch(hue, saturation, 10),
+    };
+  }
+}
+
+/**
+ * Adjust accent color based on level (0-3)
+ * Level affects the intensity/saturation of the accent
+ */
+function adjustAccentByLevel(
+  primaryHex: string,
+  level: 0 | 1 | 2 | 3
+): { primary: string; ring: string } {
+  const rgb = hexToRgb(primaryHex);
+  if (!rgb) {
+    return { primary: 'oklch(0.5 0 0)', ring: 'oklch(0.5 0 0)' };
+  }
+
+  // Convert to HSL
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+
+  const hDeg = h * 360;
+  const sPercent = s * 100;
+  const lPercent = l * 100;
+
+  // Level adjusts saturation: 0 = muted, 3 = vibrant
+  // Level 0: -30% saturation, Level 1: -15%, Level 2: 0%, Level 3: +15%
+  const saturationAdjust = [-30, -15, 0, 15][level];
+  const adjustedSaturation = Math.max(0, Math.min(100, sPercent + saturationAdjust));
+
+  return {
+    primary: hslToOklch(hDeg, adjustedSaturation, lPercent),
+    ring: hslToOklch(hDeg, adjustedSaturation, lPercent),
+  };
 }
 
 /**
@@ -122,9 +304,10 @@ export function ThemeProvider({ children, theme }: ThemeProviderProps) {
 
     // Handle full theme object
     const { colorScheme, radius, density, typography, color } = theme;
+    const isDarkMode = colorScheme === 'dark';
 
     // Color scheme (light/dark)
-    if (colorScheme === 'dark') {
+    if (isDarkMode) {
       el.classList.add('dark');
     } else {
       el.classList.remove('dark');
@@ -136,9 +319,13 @@ export function ThemeProvider({ children, theme }: ThemeProviderProps) {
       el.style.setProperty('--radius', getRadiusValue(radius));
     }
 
-    // Density
+    // Density - set CSS variables for spacing
     if (density) {
       el.dataset.density = density;
+      const { spacing, padding, gap } = getDensitySpacing(density);
+      el.style.setProperty('--density-spacing', String(spacing));
+      el.style.setProperty('--density-padding', padding);
+      el.style.setProperty('--density-gap', gap);
     }
 
     // Typography
@@ -176,72 +363,112 @@ export function ThemeProvider({ children, theme }: ThemeProviderProps) {
           });
         });
       }
-      // No auto-download from Google Fonts - user must provide fontSources
     }
 
-    // Colors
+    // Colors - set on both element and documentElement for Tailwind compatibility
     if (color) {
-      // Accent color
+      const root = document.documentElement;
+
+      // Grayscale colors (affects muted, border, card, etc.)
+      if (color.grayscale) {
+        const grayscaleColors = generateGrayscaleColors(color.grayscale, isDarkMode);
+        Object.entries(grayscaleColors).forEach(([key, value]) => {
+          el.style.setProperty(`--${key}`, value);
+          root.style.setProperty(`--${key}`, value);
+        });
+      }
+
+      // Accent color with level adjustment
       if (color.accent?.primary) {
-        const hslValues = hexToHslValues(color.accent.primary);
-        if (hslValues) {
-          el.style.setProperty('--primary', hslValues);
-          // Also set accent to match primary
-          el.style.setProperty('--accent', hslValues);
+        const level = color.accent.level ?? 2; // Default to level 2 (no adjustment)
+        const { primary, ring } = adjustAccentByLevel(color.accent.primary, level);
+
+        el.style.setProperty('--primary', primary);
+        el.style.setProperty('--accent', primary);
+        el.style.setProperty('--ring', ring);
+        root.style.setProperty('--primary', primary);
+        root.style.setProperty('--accent', primary);
+        root.style.setProperty('--ring', ring);
+
+        // Calculate and set primary-foreground based on luminance
+        const primaryLuminance = getLuminance(color.accent.primary);
+        if (primaryLuminance > 0.5) {
+          // Light primary color -> dark foreground text
+          el.style.setProperty('--primary-foreground', 'oklch(0.145 0 0)');
+          el.style.setProperty('--accent-foreground', 'oklch(0.145 0 0)');
+          root.style.setProperty('--primary-foreground', 'oklch(0.145 0 0)');
+          root.style.setProperty('--accent-foreground', 'oklch(0.145 0 0)');
+        } else {
+          // Dark primary color -> light foreground text
+          el.style.setProperty('--primary-foreground', 'oklch(0.985 0 0)');
+          el.style.setProperty('--accent-foreground', 'oklch(0.985 0 0)');
+          root.style.setProperty('--primary-foreground', 'oklch(0.985 0 0)');
+          root.style.setProperty('--accent-foreground', 'oklch(0.985 0 0)');
         }
       }
 
       // Surface colors
       if (color.surface?.background) {
-        const hslValues = hexToHslValues(color.surface.background);
-        if (hslValues) {
-          el.style.setProperty('--background', hslValues);
+        const oklchValue = hexToOklch(color.surface.background);
+        if (oklchValue) {
+          el.style.setProperty('--background', oklchValue);
+          root.style.setProperty('--background', oklchValue);
         }
+
+        // Auto-calculate chat-foreground based on background luminance
+        // This ensures AI message text is always readable regardless of background
+        const bgLuminance = getLuminance(color.surface.background);
+        const chatForeground = bgLuminance > 0.5
+          ? 'oklch(0.145 0 0)'  // Dark text for light backgrounds
+          : 'oklch(0.985 0 0)'; // Light text for dark backgrounds
+        el.style.setProperty('--chat-foreground', chatForeground);
+        root.style.setProperty('--chat-foreground', chatForeground);
       }
+
+      // Foreground color - apply directly without conditions
       if (color.surface?.foreground) {
-        const foregroundColor = color.surface.foreground;
-        const luminance = getLuminance(foregroundColor);
-        const isDarkMode = colorScheme === 'dark';
-
-        // In dark mode, only apply foreground if it's a light color (luminance > 0.5)
-        // In light mode, only apply foreground if it's a dark color (luminance <= 0.5)
-        // This prevents dark text on dark background or light text on light background
-        const shouldApply = isDarkMode ? luminance > 0.5 : luminance <= 0.5;
-
-        if (shouldApply) {
-          const hslValues = hexToHslValues(foregroundColor);
-          if (hslValues) {
-            el.style.setProperty('--foreground', hslValues);
-          }
+        const oklchValue = hexToOklch(color.surface.foreground);
+        if (oklchValue) {
+          el.style.setProperty('--foreground', oklchValue);
+          root.style.setProperty('--foreground', oklchValue);
         }
       }
     }
 
     // Cleanup function
     return () => {
+      const root = document.documentElement;
       el.classList.remove('dark');
       el.removeAttribute('data-radius');
       el.removeAttribute('data-density');
       el.style.removeProperty('--radius');
-      document.documentElement.style.removeProperty('font-size');
+      el.style.removeProperty('--density-spacing');
+      el.style.removeProperty('--density-padding');
+      el.style.removeProperty('--density-gap');
+      root.style.removeProperty('font-size');
       el.style.removeProperty('--font-family');
       el.style.removeProperty('--font-family-mono');
-      document.documentElement.style.removeProperty('--font-sans');
-      document.documentElement.style.removeProperty('--font-mono');
-      document.documentElement.style.removeProperty('--default-font-family');
-      document.documentElement.style.removeProperty('--default-mono-font-family');
-      el.style.removeProperty('--primary');
-      el.style.removeProperty('--accent');
-      el.style.removeProperty('--background');
-      el.style.removeProperty('--foreground');
-      // Note: Google Font <link> tags are intentionally not removed
-      // as fonts are cached by the browser and may be reused
+      root.style.removeProperty('--font-sans');
+      root.style.removeProperty('--font-mono');
+      root.style.removeProperty('--default-font-family');
+      root.style.removeProperty('--default-mono-font-family');
+      // Color properties - remove from both el and root
+      const colorProps = [
+        '--primary', '--primary-foreground', '--accent', '--accent-foreground',
+        '--ring', '--background', '--foreground', '--chat-foreground', '--muted', '--muted-foreground',
+        '--border', '--card', '--card-foreground', '--popover', '--popover-foreground',
+        '--secondary', '--secondary-foreground'
+      ];
+      colorProps.forEach(prop => {
+        el.style.removeProperty(prop);
+        root.style.removeProperty(prop);
+      });
     };
   }, [theme]);
 
   return (
-    <div 
-      ref={themeRef} 
+    <div
+      ref={themeRef}
       className="h-full w-full bg-background text-foreground"
       style={{
         ...(theme?.typography?.fontFamily && { fontFamily: theme.typography.fontFamily }),

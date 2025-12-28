@@ -9,12 +9,27 @@ import { useAppStore } from './store/useAppStore';
 // 其他配置项(如 threadItemActions.feedback)会被自动过滤掉
 // ============================================================================
 const playgroundConfig: Partial<ChatKitOptions> = {
-   theme: {
+  theme: {
     colorScheme: 'dark',
-    radius: 'sharp',
-    density: 'compact',
+    radius: 'pill',
+    density: 'normal',
+    color: {
+      grayscale: {
+        hue: 230,
+        tint: 6,
+        shade: 1
+      },
+      accent: {
+        primary: '#8f7676',
+        level: 2
+      },
+      surface: {
+        background: '#000000',
+        foreground: '#ffadad'
+      }
+    },
     typography: {
-      baseSize: 14,
+      baseSize: 16,
       fontFamily: '\'JetBrains Mono\', monospace',
       fontFamilyMono: '\'JetBrains Mono\', monospace',
       fontSources: [
@@ -47,15 +62,6 @@ const playgroundConfig: Partial<ChatKitOptions> = {
       }
       // ...and 1 more tool
     ],
-    models: [
-      {
-        id: 'gpt-5',
-        label: 'gpt-5',
-        description: 'Balanced intelligence',
-        'default': true
-      }
-      // ...and 3 more models
-    ],
   },
   startScreen: {
     greeting: '',
@@ -70,48 +76,12 @@ const playgroundConfig: Partial<ChatKitOptions> = {
   },
 };
 
-// 过滤 playground 配置，只保留白名单内的配置项
+// 过滤 playground 配置（只保留白名单项）
 const filteredPlaygroundConfig = filterPlaygroundOptions(playgroundConfig);
 
-// 本地配置 - 项目中的固定配置，不会被 playground 配置覆盖
-const localConfig: Partial<ChatKitOptions> = {
-  header: {
-    enabled: true,
-    title: {
-      enabled: true,
-      text: 'Xpert Assistant',
-    },
-  },
-  composer: {
-    placeholder: '随便问我点什么吧～～',
-    tools: [
-      {
-        id: 'create-theme',
-        label: 'Create Theme',
-        shortLabel: 'Theme',
-        icon: 'compass',
-        placeholderOverride: 'Describe the theme you want to create...',
-      },
-      {
-        id: 'web-search',
-        label: 'Web Search',
-        shortLabel: 'Search',
-        icon: 'search',
-        placeholderOverride: 'Enter your search query...',
-      },
-    ],
-  },
-};
-
-// 合并配置: playground 配置覆盖本地配置(仅白名单项)
+// 最终配置
 const chatkitOptions: Partial<ChatKitOptions> = {
-  ...localConfig,
   ...filteredPlaygroundConfig,
-  // 深度合并 composer (保留 tools，应用 playground 的 attachments)
-  composer: {
-    ...localConfig.composer,
-    ...filteredPlaygroundConfig.composer,
-  },
 }
 
 export default function App() {
