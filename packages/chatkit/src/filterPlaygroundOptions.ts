@@ -1,12 +1,12 @@
 import type { ChatKitOptions, ChatKitTheme, ColorScheme } from './options';
 
 /**
- * Playground 配置白名单 - 只允许这些配置项从 playground 复制过来生效
- * 过滤掉: locale, initialThread, header, history, threadItemActions, disclaimer, entities, widgets, onClientTool
+ * Playground configuration whitelist - only allow these options to take effect when copied from the playground
+ * Filters out: locale, initialThread, header, history, threadItemActions, disclaimer, entities, widgets, onClientTool
  */
 
 /**
- * 允许从 Playground 配置的选项类型
+ * Options allowed to be configured from Playground
  */
 export type PlaygroundAllowedOptions = {
   api?: ChatKitOptions['api'];
@@ -16,7 +16,7 @@ export type PlaygroundAllowedOptions = {
 };
 
 /**
- * 白名单配置项 key 列表
+ * Whitelist of allowed option keys
  */
 const ALLOWED_KEYS: (keyof PlaygroundAllowedOptions)[] = [
   'api',
@@ -26,22 +26,22 @@ const ALLOWED_KEYS: (keyof PlaygroundAllowedOptions)[] = [
 ];
 
 /**
- * 从 Playground 复制的配置中过滤出允许的配置项
+ * Filter out only the allowed options from a Playground config
  *
- * @param options - 从 playground 复制的完整配置
- * @returns 只包含白名单配置项的对象
+ * @param options - Full config copied from the playground
+ * @returns An object containing only whitelisted options
  *
  * @example
  * ```ts
- * // 从 playground 复制的配置
+ * // Config copied from the playground
  * const playgroundConfig = {
  *   theme: { colorScheme: 'light', radius: 'pill' },
- *   threadItemActions: { feedback: true }, // 会被过滤掉
+ *   threadItemActions: { feedback: true }, // will be filtered out
  *   startScreen: { greeting: 'Hello!' },
  * };
  *
  * const filtered = filterPlaygroundOptions(playgroundConfig);
- * // 结果: { theme: { colorScheme: 'light', radius: 'pill' }, startScreen: { greeting: 'Hello!' } }
+ * // Result: { theme: { colorScheme: 'light', radius: 'pill' }, startScreen: { greeting: 'Hello!' } }
  * ```
  */
 export function filterPlaygroundOptions<T extends Partial<ChatKitOptions>>(
@@ -51,7 +51,7 @@ export function filterPlaygroundOptions<T extends Partial<ChatKitOptions>>(
 
   for (const key of ALLOWED_KEYS) {
     if (key in options && options[key] !== undefined) {
-      // @ts-expect-error - 动态赋值
+      // @ts-expect-error - dynamic assignment
       filtered[key] = options[key];
     }
   }
@@ -62,28 +62,28 @@ export function filterPlaygroundOptions<T extends Partial<ChatKitOptions>>(
 }
 
 /**
- * 合并 Playground 配置与本地配置
- * Playground 配置会覆盖本地配置中的对应项（只限白名单内的配置）
+ * Merge Playground config with local config
+ * Playground config overrides matching items in local config (whitelist only)
  *
- * @param localOptions - 本地项目中的基础配置（可包含 onClientTool, header 等）
- * @param playgroundOptions - 从 playground 复制的配置
- * @returns 合并后的配置
+ * @param localOptions - Base config in the local project (can include onClientTool, header, etc.)
+ * @param playgroundOptions - Config copied from the playground
+ * @returns Merged config
  *
  * @example
  * ```ts
  * const localConfig = {
  *   api: { getClientSecret: async () => '...' },
- *   onClientTool: async () => { ... },  // 保留
- *   header: { enabled: true },           // 保留
+ *   onClientTool: async () => { ... },  // kept
+ *   header: { enabled: true },          // kept
  * };
  *
  * const playgroundConfig = {
  *   theme: { colorScheme: 'dark' },
- *   threadItemActions: { feedback: true }, // 被过滤
+ *   threadItemActions: { feedback: true }, // filtered out
  * };
  *
  * const merged = mergeWithPlaygroundOptions(localConfig, playgroundConfig);
- * // 结果: { api, onClientTool, header, theme }
+ * // Result: { api, onClientTool, header, theme }
  * ```
  */
 export function mergeWithPlaygroundOptions<T extends Partial<ChatKitOptions>>(

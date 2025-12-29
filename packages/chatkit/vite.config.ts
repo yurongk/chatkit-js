@@ -11,6 +11,12 @@ export default defineConfig({
       fileName: 'index',
       formats: ['es'],
     },
+    rollupOptions: {
+      external: (id) =>
+        id.startsWith('@a2ui/lit') ||
+        id.startsWith('@langchain/core') ||
+        id.startsWith('@langchain/langgraph-sdk'),
+    },
     sourcemap: true,
     minify: false,
   },
