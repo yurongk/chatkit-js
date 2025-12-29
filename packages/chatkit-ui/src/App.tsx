@@ -7,12 +7,14 @@ import { A2UIProvider } from "@a2ui/react";
 import { setLanguage } from "./i18n";
 
 export type AppProps = {
-  clientSecret?: string;
   options?: ChatKitOptions | null;
+  clientSecret: string;
 };
 
-export function App({ clientSecret = "", options }: AppProps) {
+export function App({ clientSecret, options }: AppProps) {
   const apiKey = clientSecret.trim() ? clientSecret : undefined;
+  const xpertId = import.meta.env.VITE_XPERTAI_XPERT_ID as string | undefined;
+  const apiUrl = import.meta.env.VITE_XPERTAI_API_URL as string | undefined;
 
   // Extract options
   const theme = options?.theme;
@@ -29,12 +31,11 @@ export function App({ clientSecret = "", options }: AppProps) {
         <A2UIProvider onAction={(action) => {
           console.log("A2UI Action:", action);
         }}>
-          <StreamProvider apiKey={apiKey}>
+          <StreamProvider apiKey={apiKey} apiUrl={options?.api.apiUrl || apiUrl} xpertId={options?.api.xpertId || xpertId}>
             <Chat
               className="flex-1"
-              showAvatar={true}
-              clientSecret={clientSecret}
-              options={options ?? {}}
+              clientSecret={apiKey}
+              options={options}
             />
           </StreamProvider>
         </A2UIProvider>

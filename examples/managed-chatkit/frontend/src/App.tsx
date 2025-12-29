@@ -10,40 +10,7 @@ import { useAppStore } from './store/useAppStore';
 // ============================================================================
 const playgroundConfig: Partial<ChatKitOptions> = {
   theme: {
-    colorScheme: 'dark',
-    radius: 'pill',
-    density: 'normal',
-    color: {
-      grayscale: {
-        hue: 230,
-        tint: 6,
-        shade: 1
-      },
-      accent: {
-        primary: '#8f7676',
-        level: 2
-      },
-      surface: {
-        background: '#000000',
-        foreground: '#ffadad'
-      }
-    },
-    typography: {
-      baseSize: 16,
-      fontFamily: '\'JetBrains Mono\', monospace',
-      fontFamilyMono: '\'JetBrains Mono\', monospace',
-      fontSources: [
-        {
-          family: 'JetBrains Mono',
-          style: 'normal',
-          weight: 300,
-          display: 'swap',
-          src: 'https://fonts.gstatic.com/s/jetbrainsmono/v23/tDbV2o-flEEny0FZhsfKu5WU4xD1OwGtT0rU3BE.woff2',
-          unicodeRange: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF'
-        }
-        // ...and 9 more font sources
-      ]
-    }
+    
   },
   composer: {
     attachments: {
@@ -81,8 +48,9 @@ const filteredPlaygroundConfig = filterPlaygroundOptions(playgroundConfig);
 
 // Final config
 export default function App() {
-  const backendOrigin = (import.meta.env.VITE_BACKEND_ORIGIN as string | undefined) ?? '';
-  const assistantId = (import.meta.env.VITE_CHATKIT_ASSISTANT_ID as string | undefined) ?? '';
+  const xpertApiUrl = (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ?? '';
+  const backendOrigin = (import.meta.env.VITE_CHATKIT_BACKEND as string | undefined) ?? '';
+  const assistantId = (import.meta.env.VITE_CHATKIT_XPERT_ID as string | undefined) ?? '';
   const frameUrl = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
 
   const chatkitOptions: Partial<ChatKitOptions> = {
@@ -95,6 +63,8 @@ export default function App() {
   const chatkit = useChatKit({
     ...chatkitOptions,
     api: {
+      apiUrl: xpertApiUrl,
+      xpertId: assistantId,
       getClientSecret: async () => {
         const createSessionUrl = backendOrigin
           ? `${backendOrigin.replace(/\/$/, '')}/api/create-session`

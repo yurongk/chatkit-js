@@ -41,25 +41,9 @@ def load_env_file(path: Path) -> None:
 
 _BASE_DIR = Path(__file__).resolve().parents[1]
 load_env_file(_BASE_DIR / ".env")
-load_env_file(_BASE_DIR / ".env.local")
-
-def is_prod() -> bool:
-    env = (os.getenv("ENVIRONMENT") or os.getenv("NODE_ENV") or "").lower()
-    return env == "production"
 
 def cors_config() -> tuple[list[str], str | None, bool]:
-    raw = os.getenv("CORS_ALLOW_ORIGINS")
-    if raw:
-        if raw.strip() == "*":
-            return ([], ".*", False)
-        origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
-        return (origins, None, True)
-
-    if is_prod():
-        return ([], None, False)
-
-    # Dev default: allow Vite dev servers on localhost/127.0.0.1 any port.
-    return ([], r"^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$", True)
+    return ([], ".*", True)
 
 
 _cors_origins, _cors_origin_regex, _cors_allow_credentials = cors_config()
@@ -140,66 +124,6 @@ async def create_session(request: Request) -> JSONResponse:
         cookie_value,
     )
 
-
-# @app.post("/api/chat")
-# async def chat(request: Request) -> JSONResponse:
-#     """Simple chat endpoint for the demo UI (server-side API key)."""
-#     api_key = os.getenv("XPERTAI_API_KEY")
-#     if not api_key:
-#         return respond(
-#             {"error": "Missing XPERTAI_API_KEY environment variable"},
-#             500,
-#         )
-
-#     body = await read_json_body(request)
-#     messages = body.get("messages")
-#     if not isinstance(messages, Sequence):
-#         return respond({"error": "Missing messages"}, 400)
-
-#     model = os.getenv("CHAT_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
-#     api_base = chatkit_api_base()
-
-#     try:
-#         async with httpx.AsyncClient(base_url=api_base, timeout=30.0) as client:
-#             upstream = await client.post(
-#                 "/v1/chat/completions",
-#                 headers={
-#                     "Authorization": f"Bearer {api_key}",
-#                     "Content-Type": "application/json",
-#                 },
-#                 json={
-#                     "model": model,
-#                     "messages": messages,
-#                     "temperature": body.get("temperature", 0.7),
-#                 },
-#             )
-#     except httpx.RequestError as error:
-#         return respond({"error": f"Failed to reach model API: {error}"}, 502)
-
-#     payload = parse_json(upstream)
-#     if not upstream.is_success:
-#         message = None
-#         if isinstance(payload, Mapping):
-#             message = payload.get("error")
-#         message = message or upstream.reason_phrase or "Failed to generate response"
-#         return respond({"error": message}, upstream.status_code)
-
-#     content = None
-#     if isinstance(payload, Mapping):
-#         choices = payload.get("choices")
-#         if isinstance(choices, list) and choices:
-#             first = choices[0]
-#             if isinstance(first, Mapping):
-#                 message = first.get("message")
-#                 if isinstance(message, Mapping):
-#                     content = message.get("content")
-
-#     if not content:
-#         return respond({"error": "Missing assistant content in response"}, 502)
-
-#     return respond({"content": content}, 200)
-
-
 def respond(
     payload: Mapping[str, Any], status_code: int, cookie_value: str | None = None
 ) -> JSONResponse:
@@ -234,9 +158,7 @@ def resolve_assistant_id(body: Mapping[str, Any]) -> str | None:
     if isinstance(assistant, Mapping):
         assistant_id = assistant.get("id")
     assistant_id = assistant_id or body.get("assistantId")
-    env_assistant = os.getenv("CHATKIT_ASSISTANT_ID") or os.getenv(
-        "VITE_CHATKIT_ASSISTANT_ID"
-    )
+    env_assistant = os.getenv("CHATKIT_XPERT_ID")
     if not assistant_id and env_assistant:
         assistant_id = env_assistant
     if assistant_id and isinstance(assistant_id, str) and assistant_id.strip():
@@ -254,8 +176,8 @@ def resolve_user(cookies: Mapping[str, str]) -> tuple[str, str | None]:
 
 def chatkit_api_base() -> str:
     return (
-        os.getenv("CHATKIT_API_BASE")
-        or os.getenv("VITE_CHATKIT_API_BASE")
+        os.getenv("XPERTAI_API_URL")
+        or os.getenv("VITE_XPERTAI_API_URL")
         or DEFAULT_CHATKIT_BASE
     )
 

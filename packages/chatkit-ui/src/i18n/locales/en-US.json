@@ -4,7 +4,7 @@
     "placeholder": "Type a message...",
     "statusOnline": "Online",
     "missingConfigShort": "Missing ChatKit configuration.",
-    "missingConfigDetail": "Missing ChatKit configuration. Check `VITE_CHATKIT_API_BASE`, `VITE_CHATKIT_ASSISTANT_ID`, and the `clientSecret` prop.",
+    "missingConfigDetail": "Missing ChatKit configuration. Check `VITE_XPERTAI_API_URL`, and the `clientSecret` prop.",
     "loadingConversation": "Loading conversation...",
     "stop": "Stop",
     "send": "Send message",

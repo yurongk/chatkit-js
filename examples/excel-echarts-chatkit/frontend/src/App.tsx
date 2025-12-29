@@ -15,8 +15,9 @@ const RENDER_ECHARTS_TOOL = 'render_echarts';
 export default function App() {
   const { t } = useAppTranslation();
   const [locale, setLocale] = useState<SupportedLocale>(() => getLanguage());
-  const backendOrigin = (import.meta.env.VITE_BACKEND_ORIGIN as string | undefined) ?? '';
-  const assistantId = (import.meta.env.VITE_CHATKIT_ASSISTANT_ID as string | undefined) ?? '';
+  const xpertApiUrl = (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ?? '';
+  const backendOrigin = (import.meta.env.VITE_CHATKIT_BACKEND as string | undefined) ?? '';
+  const assistantId = (import.meta.env.VITE_CHATKIT_XPERT_ID as string | undefined) ?? '';
   const frameUrl = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
 
   const {
@@ -78,6 +79,8 @@ export default function App() {
   const chatkit = useChatKit({
     ...chatkitOptions,
     api: {
+      apiUrl: xpertApiUrl,
+      xpertId: assistantId,
       getClientSecret: async () => {
         const createSessionUrl = backendOrigin
           ? `${backendOrigin.replace(/\/$/, '')}/api/create-session`
