@@ -1,9 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_CHATKIT_API_BASE?: string;
-  readonly VITE_CHATKIT_ASSISTANT_ID?: string;
-  readonly VITE_CHATKIT_API_KEY?: string;
+  readonly VITE_XPERTAI_API_URL?: string;
 }
 
 interface ImportMeta {

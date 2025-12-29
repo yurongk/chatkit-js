@@ -25,9 +25,7 @@ export type ChatProps = {
   options?: ChatKitOptions | null;
 };
 
-const apiUrl = import.meta.env.VITE_CHATKIT_API_BASE as string | undefined;
-const assistantId = import.meta.env.VITE_CHATKIT_ASSISTANT_ID as string | undefined;
-const apiKeyFromEnv = import.meta.env.VITE_CHATKIT_API_KEY as string | undefined;
+const defaultApiUrl = import.meta.env.VITE_XPERTAI_API_URL as string | undefined;
 const DEFAULT_HISTORY_LIMIT = 200;
 
 function createMessageId() {
@@ -108,7 +106,8 @@ export function Chat({
   const startScreen = options?.startScreen;
   const history = options?.history;
   const disclaimer = options?.disclaimer;
-  const threadItemActions = options?.threadItemActions;
+  const apiUrl = options?.api?.apiUrl || defaultApiUrl;
+  // const threadItemActions = options?.threadItemActions;
   const {setStream} = useStreamManager();
   const stream = useStreamContext();
 
@@ -206,8 +205,8 @@ export function Chat({
     }
   }, [stream.isLoading, messages, scrollToBottom]);
 
-  const hasApiKey = Boolean(clientSecret.trim() || apiKeyFromEnv?.trim());
-  const missingConfig = !apiUrl || !assistantId || !hasApiKey;
+  const hasApiKey = Boolean(clientSecret.trim());
+  const missingConfig = !apiUrl || !hasApiKey;
   const isSendDisabled =
     !trimmedDraft || stream.isLoading || missingConfig || isHistoryLoading;
 

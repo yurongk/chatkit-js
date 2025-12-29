@@ -270,6 +270,14 @@ type CustomApiConfig = {
    * How attachments will be uploaded to your server. Required when attachments are enabled.
    */
   uploadStrategy?: FileUploadStrategy;
+
+  /**
+   * The base URL for the XpertAI platform hosted API. Used for accessing xpert agents
+   * and other platform features.
+   */
+  apiUrl: string;
+
+  xpertId?: string;
 };
 
 type HostedApiConfig = {
@@ -277,6 +285,14 @@ type HostedApiConfig = {
    * Function to get a client token or refresh if the current token is expired.
    */
   getClientSecret: (currentClientSecret: string | null) => Promise<string>;
+
+  /**
+   * The base URL for the XpertAI platform hosted API. Used for accessing xpert agents
+   * and other platform features.
+   */
+  apiUrl: string;
+
+  xpertId?: string;
 };
 
 export type ChatKitOptions = {

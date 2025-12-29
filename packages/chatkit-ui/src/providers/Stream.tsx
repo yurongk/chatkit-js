@@ -59,10 +59,8 @@ export type StreamContextType = {
 const StreamContext = createContext<StreamContextType | undefined>(undefined);
 
 const defaultApiUrl =
-  (import.meta.env.VITE_CHATKIT_API_BASE as string | undefined) ??
+  (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ??
   'https://api.mtda.cloud/api/ai';
-const defaultAssistantId =
-  (import.meta.env.VITE_CHATKIT_ASSISTANT_ID as string | undefined) ?? '';
 const defaultApiKey =
   (import.meta.env.VITE_CHATKIT_API_KEY as string | undefined) ?? null;
 
@@ -525,7 +523,7 @@ const StreamSession = ({
   assistantId,
 }: {
   children: ReactNode;
-  apiKey: string | null;
+  apiKey: string;
   apiUrl: string;
   assistantId: string;
 }) => {
@@ -691,7 +689,7 @@ const StreamSession = ({
         setIsLoading(false);
       }
     },
-    [assistantId, client, handleInterrupt, setThreadId, threadId],
+    [assistantId, client, handleInterrupt, setThreadId, sendEvent, threadId],
   );
 
   submitRef.current = submit;
@@ -717,15 +715,15 @@ const StreamSession = ({
 
 export const StreamProvider: React.FC<{
   children: ReactNode;
-  apiKey?: string | null;
+  apiKey?: string;
   apiUrl?: string;
-  assistantId?: string;
-}> = ({ children, apiKey, apiUrl, assistantId }) => {
+  xpertId?: string;
+}> = ({ children, apiKey, apiUrl, xpertId }) => {
   return (
     <StreamSession
-      apiKey={apiKey ?? defaultApiKey}
-      apiUrl={apiUrl ?? defaultApiUrl}
-      assistantId={assistantId ?? defaultAssistantId}
+      apiKey={apiKey ?? defaultApiKey ?? 'your-api-key'}
+      apiUrl={apiUrl ?? defaultApiUrl }
+      assistantId={xpertId ?? 'your-xpert-id'}
     >
       {children}
     </StreamSession>

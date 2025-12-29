@@ -4,7 +4,7 @@
     "placeholder": "输入消息...",
     "statusOnline": "在线",
     "missingConfigShort": "缺少 ChatKit 配置。",
-    "missingConfigDetail": "缺少 ChatKit 配置。请检查 `VITE_CHATKIT_API_BASE`、`VITE_CHATKIT_ASSISTANT_ID` 和 `clientSecret` 参数。",
+    "missingConfigDetail": "缺少 ChatKit 配置。请检查 `VITE_XPERTAI_API_URL` 和 `clientSecret` 参数。",
     "loadingConversation": "正在加载对话...",
     "stop": "停止",
     "send": "发送消息",

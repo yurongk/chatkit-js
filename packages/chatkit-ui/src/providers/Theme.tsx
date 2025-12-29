@@ -1,9 +1,9 @@
 import * as React from 'react';
-import type { ChatKitTheme, GrayscaleOptions } from '@xpert-ai/chatkit-types';
+import type { ChatKitTheme, ColorScheme, GrayscaleOptions } from '@xpert-ai/chatkit-types';
 
 export interface ThemeProviderProps {
   children: React.ReactNode;
-  theme?: ChatKitTheme | null;
+  theme?: ColorScheme | ChatKitTheme;
 }
 
 /**
