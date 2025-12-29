@@ -28,7 +28,6 @@
     "type": "git",
     "url": "https://github.com/xpert-ai/chatkit-js"
   },
-  "license": "MIT",
   "devDependencies": {
     "typescript": "^5.3.3",
     "vite": "^5.0.0",
