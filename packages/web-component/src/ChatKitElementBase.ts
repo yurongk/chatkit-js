@@ -1,7 +1,7 @@
 import { encodeBase64 } from "@xpert-ai/chatkit-web-shared"
 
 import { ChatFrameMessenger } from "./ChatFrameMessenger"
-import { ChatKitOptions } from "@xpert-ai/chatkit-types"
+import { Card, ChatKitOptions, Entity, ListView } from "@xpert-ai/chatkit-types"
 import { removeMethods } from "./helpers"
 
 import type {
@@ -78,7 +78,7 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
     target: () => this.#frame?.contentWindow ?? null,
     targetOrigin: window.location.origin,
     handlers: {
-      onFileInputClick: ({ inputAttributes }) => {
+      onFileInputClick: ({ inputAttributes }: { inputAttributes: Record<string, string> }) => {
         return new Promise<File[]>((resolve) => {
           const input = document.createElement("input")
           for (const [key, value] of Object.entries(inputAttributes)) {
@@ -117,7 +117,13 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
         }
         return onClientTool({ name, params, id, tool_call_id })
       },
-      onWidgetAction: async ({ action, widgetItem }) => {
+      onWidgetAction: async ({ action, widgetItem }: { action: {
+          type: string;
+          payload?: Record<string, unknown> | undefined;
+        }; widgetItem: {
+            id: string;
+            widget: Card | ListView;
+      } }) => {
         const onAction = this.#opts?.widgets?.onAction
         if (!onAction) {
           this.#emitAndThrow(
@@ -128,9 +134,9 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
         }
         return onAction(action, widgetItem)
       },
-      onEntitySearch: async ({ query }) => this.#opts?.entities?.onTagSearch?.(query) ?? [],
-      onEntityClick: async ({ entity }) => this.#opts?.entities?.onClick?.(entity),
-      onEntityPreview: async ({ entity }) =>
+      onEntitySearch: async ({ query }: { query: string }) => this.#opts?.entities?.onTagSearch?.(query) ?? [],
+      onEntityClick: async ({ entity }: { entity: Entity }) => this.#opts?.entities?.onClick?.(entity),
+      onEntityPreview: async ({ entity }: { entity: Entity }) =>
         this.#opts?.entities?.onRequestPreview?.(entity) ?? { preview: null },
       onGetClientSecret: async (currentClientSecret: string | null) => {
         if (
@@ -155,23 +161,24 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
       }: {
         op: ChatKitReq["type"]
         params: Record<string, unknown>
-      }): Promise<Record<string, unknown> | null> | null => {
-        if (!this.#opts) return null
-        if (!("addMetadataToRequest" in this.#opts.api) || !this.#opts.api.addMetadataToRequest)
-          return null
+      }): void => {
+        throw new IntegrationError('ChatKit: onAddMetadataToRequest is unimplemented.')
+        // if (!this.#opts) return null
+        // if (!("addMetadataToRequest" in this.#opts.api) || !this.#opts.api.addMetadataToRequest)
+        //   return null
 
-        const result = this.#opts.api.addMetadataToRequest({ op, params })
-        if (!result) return null
+        // const result = this.#opts.api.addMetadataToRequest({ op, params })
+        // if (!result) return null
 
-        return result.then((value) => {
-          if (!value) return null
-          if (typeof value !== "object" || Array.isArray(value)) {
-            throw new IntegrationError(
-              "ChatKit: addMetadataToRequest must return an object or null.",
-            )
-          }
-          return value as Record<string, unknown>
-        })
+        // return result.then((value) => {
+        //   if (!value) return null
+        //   if (typeof value !== "object" || Array.isArray(value)) {
+        //     throw new IntegrationError(
+        //       "ChatKit: addMetadataToRequest must return an object or null.",
+        //     )
+        //   }
+        //   return value as Record<string, unknown>
+        // })
       },
     },
   })
