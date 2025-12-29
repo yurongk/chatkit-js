@@ -1,5 +1,5 @@
 import type { TMessageComponentWidgetData } from '@xpert-ai/chatkit-types';
-import { SurfaceRenderer, Types } from '@a2ui/react';
+import { SurfaceRenderer, Types } from '@xpert-ai/a2ui-react';
 
 export type WidgetMessageProps = {
   messageId: string;

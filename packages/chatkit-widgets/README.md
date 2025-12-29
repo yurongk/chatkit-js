@@ -1,11 +1,11 @@
-# @a2ui/react
+# @xpert-ai/a2ui-react
 
 A React renderer for the A2UI protocol with ShadCN-style components and Tailwind CSS.
 
 ## Installation
 
 ```bash
-npm install @a2ui/react
+npm install @xpert-ai/a2ui-react
 ```
 
 ### Peer Dependencies
@@ -26,7 +26,7 @@ Ensure your project has Tailwind CSS configured. Add the A2UI React components t
 module.exports = {
   content: [
     // ... your content paths
-    "./node_modules/@a2ui/react/**/*.{js,ts,jsx,tsx}",
+    "./node_modules/@xpert-ai/a2ui-react/**/*.{js,ts,jsx,tsx}",
   ],
   // ... rest of config
 };
@@ -35,7 +35,7 @@ module.exports = {
 ### 2. Wrap your app with providers
 
 ```tsx
-import { A2UIProvider, ThemeProvider } from "@a2ui/react";
+import { A2UIProvider, ThemeProvider } from "@xpert-ai/a2ui-react";
 
 function App() {
   const handleAction = (action) => {
@@ -56,7 +56,7 @@ function App() {
 ### 3. Process messages and render
 
 ```tsx
-import { useA2UI, A2UIRenderer } from "@a2ui/react";
+import { useA2UI, A2UIRenderer } from "@xpert-ai/a2ui-react";
 import { useEffect } from "react";
 
 function YourApp() {
@@ -188,7 +188,7 @@ All 18 standard A2UI components are implemented:
 You can customize the appearance by providing a custom theme:
 
 ```tsx
-import { ThemeProvider, defaultTheme } from "@a2ui/react";
+import { ThemeProvider, defaultTheme } from "@xpert-ai/a2ui-react";
 
 const customTheme = {
   ...defaultTheme,
@@ -237,7 +237,7 @@ function StreamingApp() {
 This package is written in TypeScript and includes full type definitions. Types are re-exported from `@a2ui/lit`:
 
 ```tsx
-import { Types, Primitives, Data } from "@a2ui/react";
+import { Types, Primitives, Data } from "@xpert-ai/a2ui-react";
 
 // Use types
 const surface: Types.Surface = ...;

@@ -3,7 +3,7 @@ import type { ChatKitOptions } from '@xpert-ai/chatkit-types';
 import { Chat } from "./components/chat";
 import { StreamProvider } from "./providers/Stream";
 import { ThemeProvider } from "./providers/Theme";
-import { A2UIProvider } from "@a2ui/react";
+import { A2UIProvider } from "@xpert-ai/a2ui-react";
 import { setLanguage } from "./i18n";
 
 export type AppProps = {
