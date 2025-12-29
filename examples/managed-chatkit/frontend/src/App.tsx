@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useChatKit, ChatKit } from '@xpert-ai/chatkit-react';
-import { ChatKitOptions, ClientToolMessageInput } from '@xpert-ai/chatkit-types';
+import { ChatKitOptions, ClientToolMessageInput, filterPlaygroundOptions } from '@xpert-ai/chatkit-types';
 import { useAppStore } from './store/useAppStore';
 
 // ============================================================================
@@ -11,28 +11,21 @@ import { useAppStore } from './store/useAppStore';
 const playgroundConfig: Partial<ChatKitOptions> = {
   theme: {
     colorScheme: 'light',
-    radius: 'sharp',
-    density: 'compact',
+    radius: 'pill',
+    density: 'normal',
     color: {
+      grayscale: {
+        hue: 120,
+        tint: 6
+      },
       accent: {
-        primary: '#9e2929',
-        level: 3
+        primary: '#83e58a',
+        level: 2
       }
     },
     typography: {
       baseSize: 16,
-      fontFamily: '"OpenAI Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
-      fontFamilyMono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace',
-      fontSources: [
-        {
-          family: 'OpenAI Sans',
-          src: 'https://cdn.openai.com/common/fonts/openai-sans/v2/OpenAISans-Regular.woff2',
-          weight: 400,
-          style: 'normal',
-          display: 'swap'
-        }
-      // ...and 7 more font sources
-      ]
+      fontFamily: 'Inter, sans-serif',
     }
   },
   composer: {
@@ -54,7 +47,7 @@ const playgroundConfig: Partial<ChatKitOptions> = {
     ],
   },
   startScreen: {
-    greeting: 'What can I help with today?',
+    greeting: '',
     prompts: [
       {
         icon: 'circle-question',
@@ -66,6 +59,8 @@ const playgroundConfig: Partial<ChatKitOptions> = {
   },
 };
 
+// Filter playground config (keep only whitelisted items)
+const filteredPlaygroundConfig = filterPlaygroundOptions(playgroundConfig);
 
 // Final config
 export default function App() {
@@ -74,11 +69,15 @@ export default function App() {
   const assistantId = (import.meta.env.VITE_CHATKIT_XPERT_ID as string | undefined) ?? '';
   const frameUrl = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
 
+  const chatkitOptions: Partial<ChatKitOptions> = {
+    ...filteredPlaygroundConfig,
+    frameUrl,
+  }
+
   const setChatkit = useAppStore((state) => state.setChatkit);
 
-  const chatkitOptions = useChatKit({
-    ...playgroundConfig,
-    frameUrl,
+  const chatkit = useChatKit({
+    ...chatkitOptions,
     api: {
       apiUrl: xpertApiUrl,
       xpertId: assistantId,
@@ -120,7 +119,7 @@ export default function App() {
       console.error('Failed to create session:', error);
     },
     onReady: () => {
-      setChatkit(chatkitOptions);
+      setChatkit(chatkit);
     },
     onEffect: ({name, data}) => {
       console.log(`Effect triggered: ${name}`, data);
@@ -131,7 +130,7 @@ export default function App() {
     console.log('Managed Chatkit Example with React Component');
     console.log('Backend:', backendOrigin || '(using proxy)');
     console.log('Assistant ID:', assistantId);
-    console.log('Theme:', playgroundConfig.theme);
+    console.log('Theme:', chatkitOptions.theme);
   }, [backendOrigin, assistantId]);
 
   return (
@@ -156,13 +155,13 @@ export default function App() {
           <div className="pt-2 border-t">
             <strong>Theme Config:</strong>
             <pre className="mt-1 p-2 bg-gray-100 rounded text-[10px] overflow-auto max-h-40">
-              {JSON.stringify(playgroundConfig.theme, null, 2)}
+              {JSON.stringify(chatkitOptions.theme, null, 2)}
             </pre>
           </div>
 
           <div>
             <button className="mt-2 px-3 py-1 bg-red-500 text-white rounded"
-              onClick={() => chatkitOptions.sendUserMessage({ text: 'Hello world!', newThread: true })}
+              onClick={() => chatkit.sendUserMessage({ text: 'Hello world!', newThread: true })}
             >
               Trigger Conversation
             </button>
@@ -170,7 +169,7 @@ export default function App() {
         </div>
       </div>
 
-      <ChatKit control={chatkitOptions.control} className="shrink-0 w-[500px]" />
+      <ChatKit control={chatkit.control} className="shrink-0 w-[500px]" />
     </div>
   );
 }

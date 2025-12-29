@@ -80,6 +80,12 @@ export function useParentMessenger(
     parentOriginRef.current = getParentOrigin();
   }, []);
 
+  // Store callback in ref to avoid stale closure issues
+  const onSetOptionsRef = useRef(onSetOptions);
+  useEffect(() => {
+    onSetOptionsRef.current = onSetOptions;
+  }, [onSetOptions]);
+
   useEffect(() => {
     if (!isParentAvailable) return;
 
@@ -120,8 +126,8 @@ export function useParentMessenger(
       }
 
       if (payload.type == "command" && payload.command === "onSetOptions") {
-        if (onSetOptions) {
-          onSetOptions(payload.data as ChatKitOptions | null);
+        if (onSetOptionsRef.current) {
+          onSetOptionsRef.current(payload.data as ChatKitOptions | null);
         }
         if (payload.nonce) {
           sendResponse(payload.nonce, { ok: true });

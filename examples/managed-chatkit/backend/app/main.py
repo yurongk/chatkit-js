@@ -42,6 +42,11 @@ def load_env_file(path: Path) -> None:
 _BASE_DIR = Path(__file__).resolve().parents[1]
 load_env_file(_BASE_DIR / ".env")
 
+def is_prod() -> bool:
+    env = (os.getenv("ENVIRONMENT") or os.getenv("NODE_ENV") or "").lower()
+    return env == "production"
+
+
 def cors_config() -> tuple[list[str], str | None, bool]:
     return ([], ".*", True)
 
