@@ -107,8 +107,10 @@ pnpm lint
 
 ## Publish
 
+To publish a specific package (like `@xpert-ai/chatkit-vue`), run:
+
 ```bash
-pnpm -r publish --filter @xpert-ai/chatkit-vue
+pnpm -r publish --filter @xpert-ai/chatkit-vue... --access public
 ```
 
 ## 📚 Learn More
