@@ -46,6 +46,7 @@ export type StreamContextType = {
   values: StateType;
   messages: ChatKitAIMessage[];
   isLoading: boolean;
+  isReady: boolean;
   error: unknown;
   submit: (
     values?: TChatRequest | null,
@@ -692,6 +693,9 @@ const StreamSession = ({
 
   submitRef.current = submit;
 
+  // isReady is true when we have a valid client secret (starts with 'cs-x-')
+  const isReady = Boolean(apiKey && apiKey.startsWith('cs-x-'));
+
   const value: StreamContextType = {
     client,
     assistantId,
@@ -699,6 +703,7 @@ const StreamSession = ({
     values,
     messages: values.messages ?? [],
     isLoading,
+    isReady,
     error,
     submit,
     stop,
