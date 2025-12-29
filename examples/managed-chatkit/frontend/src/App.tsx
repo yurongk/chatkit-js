@@ -10,7 +10,30 @@ import { useAppStore } from './store/useAppStore';
 // ============================================================================
 const playgroundConfig: Partial<ChatKitOptions> = {
   theme: {
-    
+    colorScheme: 'light',
+    radius: 'sharp',
+    density: 'compact',
+    color: {
+      accent: {
+        primary: '#9e2929',
+        level: 3
+      }
+    },
+    typography: {
+      baseSize: 16,
+      fontFamily: '"OpenAI Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
+      fontFamilyMono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace',
+      fontSources: [
+        {
+          family: 'OpenAI Sans',
+          src: 'https://cdn.openai.com/common/fonts/openai-sans/v2/OpenAISans-Regular.woff2',
+          weight: 400,
+          style: 'normal',
+          display: 'swap'
+        }
+      // ...and 7 more font sources
+      ]
+    }
   },
   composer: {
     attachments: {
@@ -31,7 +54,7 @@ const playgroundConfig: Partial<ChatKitOptions> = {
     ],
   },
   startScreen: {
-    greeting: '',
+    greeting: 'What can I help with today?',
     prompts: [
       {
         icon: 'circle-question',
