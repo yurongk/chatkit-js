@@ -61,8 +61,6 @@ const StreamContext = createContext<StreamContextType | undefined>(undefined);
 const defaultApiUrl =
   (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ??
   'https://api.mtda.cloud/api/ai';
-const defaultApiKey =
-  (import.meta.env.VITE_CHATKIT_API_KEY as string | undefined) ?? null;
 
 function applyOptimisticValues(
   prev: StateType,
@@ -721,7 +719,7 @@ export const StreamProvider: React.FC<{
 }> = ({ children, apiKey, apiUrl, xpertId }) => {
   return (
     <StreamSession
-      apiKey={apiKey ?? defaultApiKey ?? 'your-api-key'}
+      apiKey={apiKey ?? 'your-api-key'}
       apiUrl={apiUrl ?? defaultApiUrl }
       assistantId={xpertId ?? 'your-xpert-id'}
     >
