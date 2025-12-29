@@ -138,7 +138,7 @@ export function HistorySidebar({
           variant="ghost"
           size="icon"
           disabled={disabled}
-          className="h-8 w-8"
+          className="h-8 w-8 cursor-pointer"
         >
           <HistoryIcon />
           <span className="sr-only">{t('history.conversationHistory')}</span>
