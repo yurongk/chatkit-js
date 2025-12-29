@@ -105,6 +105,12 @@ pnpm test
 pnpm lint
 ```
 
+## Publish
+
+```bash
+pnpm -r publish --filter @xpert-ai/chatkit-vue
+```
+
 ## 📚 Learn More
 
 - [Full Documentation](docs/index.md)
