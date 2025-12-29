@@ -628,6 +628,8 @@ export type SupportedLocale =
   | 'uk'
   | 'vi'
   | 'zh'
+  | 'zh-Hans'
+  | 'zh-CN'
   | 'zh-Hant'
   | 'en';
 
