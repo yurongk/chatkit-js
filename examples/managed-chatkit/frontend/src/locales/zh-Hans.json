@@ -1,0 +1,30 @@
+{
+  "title": "Managed Chatkit 示例",
+  "subtitle": "使用 React 组件与配置",
+  "labels": {
+    "backend": "后端",
+    "chatkitUrl": "Chatkit 地址",
+    "assistant": "助手",
+    "themeConfig": "主题配置",
+    "language": "语言",
+    "proxy": "(代理)",
+    "unset": "(未设置)",
+    "default": "(默认)"
+  },
+  "buttons": {
+    "triggerConversation": "触发对话"
+  },
+  "messages": {
+    "helloWorld": "你好，世界！"
+  },
+  "tools": {
+    "searchDocs": {
+      "label": "搜索文档",
+      "shortLabel": "文档",
+      "placeholder": "搜索文档"
+    }
+  },
+  "prompts": {
+    "whatIsChatKit": "什么是 Chatkit？"
+  }
+}

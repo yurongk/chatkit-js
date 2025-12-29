@@ -1,0 +1,30 @@
+{
+  "title": "Managed Chatkit Example",
+  "subtitle": "Using React Component with Options",
+  "labels": {
+    "backend": "Backend",
+    "chatkitUrl": "Chatkit URL",
+    "assistant": "Assistant",
+    "themeConfig": "Theme Config",
+    "language": "Language",
+    "proxy": "(proxy)",
+    "unset": "(unset)",
+    "default": "(default)"
+  },
+  "buttons": {
+    "triggerConversation": "Trigger Conversation"
+  },
+  "messages": {
+    "helloWorld": "Hello world!"
+  },
+  "tools": {
+    "searchDocs": {
+      "label": "Search docs",
+      "shortLabel": "Docs",
+      "placeholder": "Search documentation"
+    }
+  },
+  "prompts": {
+    "whatIsChatKit": "What is ChatKit?"
+  }
+}
