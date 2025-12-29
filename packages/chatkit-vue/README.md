@@ -15,8 +15,8 @@ pnpm add @xpert-ai/chatkit-vue
 import { ChatKit, useChatKit } from '@xpert-ai/chatkit-vue';
 
 const { control } = useChatKit({
-  apiBase: 'https://your-api-host',
-  apiKey: 'your-api-key',
+  apiBase: 'https://your-xpertai-api-host',
+  apiKey: 'your-xpertai-api-key',
   onReady: () => {
     console.log('chatkit ready');
   },
