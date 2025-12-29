@@ -24,7 +24,6 @@
     "react-dom": ">=19"
   },
   "dependencies": {
-    "@a2ui/react": "workspace:*",
     "@langchain/core": "^1.0.2",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.4",
@@ -32,6 +31,7 @@
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-separator": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.20",
+    "@xpert-ai/a2ui-react": "workspace:*",
     "@xpert-ai/chatkit-types": "workspace:*",
     "@xpert-ai/chatkit-web-shared": "workspace:*",
     "@xpert-ai/xpert-sdk": "^0.0.2",
