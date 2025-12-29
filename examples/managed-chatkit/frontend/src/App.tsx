@@ -1,72 +1,78 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { useChatKit, ChatKit } from '@xpert-ai/chatkit-react';
-import { ChatKitOptions, ClientToolMessageInput } from '@xpert-ai/chatkit-types';
+import { ChatKitOptions, ClientToolMessageInput, SupportedLocale } from '@xpert-ai/chatkit-types';
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from './store/useAppStore';
-
-// ============================================================================
-// Playground config - copied from https://chatkit.studio/playground
-// Only whitelisted options take effect: theme, composer, startScreen, api
-// Other options (e.g., threadItemActions.feedback) are automatically filtered out
-// ============================================================================
-const playgroundConfig: Partial<ChatKitOptions> = {
-  theme: {
-    colorScheme: 'light',
-    radius: 'pill',
-    density: 'normal',
-    color: {
-      grayscale: {
-        hue: 120,
-        tint: 6
-      },
-      accent: {
-        primary: '#83e58a',
-        level: 2
-      }
-    },
-    typography: {
-      baseSize: 16,
-      fontFamily: 'Inter, sans-serif',
-    }
-  },
-  composer: {
-    attachments: {
-      enabled: true,
-      maxCount: 5,
-      maxSize: 10485760
-    },
-    tools: [
-      {
-        id: 'search_docs',
-        label: 'Search docs',
-        shortLabel: 'Docs',
-        placeholderOverride: 'Search documentation',
-        icon: 'book-open',
-        pinned: false
-      }
-      // ...and 1 more tool
-    ],
-  },
-  startScreen: {
-    greeting: '',
-    prompts: [
-      {
-        icon: 'circle-question',
-        label: 'What is ChatKit?',
-        prompt: 'What is ChatKit?'
-      }
-      // ...and 4 more prompts
-    ],
-  },
-};
+import { getLanguage, setLanguage } from './i18n';
 
 // Final config
 export default function App() {
+  const { t, i18n } = useTranslation();
+  const [locale, setLocale] = useState<SupportedLocale>(() => getLanguage());
   const xpertApiUrl = (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ?? '';
   const backendOrigin = (import.meta.env.VITE_CHATKIT_BACKEND as string | undefined) ?? '';
   const assistantId = (import.meta.env.VITE_CHATKIT_XPERT_ID as string | undefined) ?? '';
   const frameUrl = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
 
   const setChatkit = useAppStore((state) => state.setChatkit);
+
+  // ============================================================================
+  // Playground config - copied from https://chatkit.studio/playground
+  // Only whitelisted options take effect: theme, composer, startScreen, api
+  // Other options (e.g., threadItemActions.feedback) are automatically filtered out
+  // ============================================================================
+  const playgroundConfig = useMemo<Partial<ChatKitOptions>>(() => ({
+    locale,
+    theme: {
+      colorScheme: 'light',
+      radius: 'pill',
+      density: 'normal',
+      color: {
+        grayscale: {
+          hue: 120,
+          tint: 6
+        },
+        accent: {
+          primary: '#83e58a',
+          level: 2
+        }
+      },
+      typography: {
+        baseSize: 16,
+        fontFamily: 'Inter, sans-serif',
+      }
+    },
+    composer: {
+      attachments: {
+        enabled: true,
+        maxCount: 5,
+        maxSize: 10485760
+      },
+      tools: [
+        {
+          id: 'search_docs',
+          label: t('tools.searchDocs.label'),
+          shortLabel: t('tools.searchDocs.shortLabel'),
+          placeholderOverride: t('tools.searchDocs.placeholder'),
+          icon: 'book-open',
+          pinned: false
+        }
+        // ...and 1 more tool
+      ],
+    },
+    startScreen: {
+      greeting: '',
+      prompts: [
+        {
+          icon: 'circle-question',
+          label: t('prompts.whatIsChatKit'),
+          prompt: t('prompts.whatIsChatKit')
+        }
+        // ...and 4 more prompts
+      ],
+    },
+  }), [t, i18n.language]);
 
   const chatkit = useChatKit({
     ...playgroundConfig,
@@ -124,29 +130,51 @@ export default function App() {
     console.log('Backend:', backendOrigin || '(using proxy)');
     console.log('Assistant ID:', assistantId);
     console.log('Theme:', playgroundConfig.theme);
-  }, [backendOrigin, assistantId]);
+  }, [backendOrigin, assistantId, playgroundConfig]);
+
+  const handleLanguageChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextLang = event.target.value;
+    i18n.changeLanguage(nextLang);
+    setLocale(nextLang as SupportedLocale);
+    setLanguage(nextLang);
+  };
 
   return (
     <div className="flex h-screen">
       <div className="flex-1 p-4 border-r overflow-hidden border-gray-300 bg-white">
-        <h1 className="text-2xl font-bold mb-4">Managed Chatkit Example</h1>
-        <p className="text-sm text-gray-600 mb-2">Using React Component with Options</p>
+        <div className="flex items-start justify-between mb-4 gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">{t('title')}</h1>
+            <p className="text-sm text-gray-600 mt-1">{t('subtitle')}</p>
+          </div>
+          <label className="text-xs text-gray-600 flex flex-col gap-1 min-w-[140px]">
+            <span className="font-medium">{t('labels.language')}</span>
+            <select
+              className="border border-gray-300 rounded px-2 py-1 text-sm"
+              value={i18n.language}
+              onChange={handleLanguageChange}
+            >
+              <option value="en-US">English</option>
+              <option value="zh-Hans">简体中文</option>
+            </select>
+          </label>
+        </div>
 
         <div className="space-y-2 text-xs text-gray-500">
           <div>
-            <strong>Backend:</strong> {backendOrigin || '(proxy)'}
+            <strong>{t('labels.backend')}:</strong> {backendOrigin || t('labels.proxy')}
           </div>
           <div>
-            <strong>Chatkit URL:</strong>
+            <strong>{t('labels.chatkitUrl')}:</strong>
             <div className="break-all mt-1 p-1 bg-gray-100 rounded text-[10px]">
-              {frameUrl || '(unset)'}
+              {frameUrl || t('labels.unset')}
             </div>
           </div>
           <div>
-            <strong>Assistant:</strong> {assistantId || '(default)'}
+            <strong>{t('labels.assistant')}:</strong> {assistantId || t('labels.default')}
           </div>
           <div className="pt-2 border-t">
-            <strong>Theme Config:</strong>
+            <strong>{t('labels.themeConfig')}:</strong>
             <pre className="mt-1 p-2 bg-gray-100 rounded text-[10px] overflow-auto max-h-40">
               {JSON.stringify(playgroundConfig.theme, null, 2)}
             </pre>
@@ -154,9 +182,9 @@ export default function App() {
 
           <div>
             <button className="mt-2 px-3 py-1 bg-red-500 text-white rounded"
-              onClick={() => chatkit.sendUserMessage({ text: 'Hello world!', newThread: true })}
+              onClick={() => chatkit.sendUserMessage({ text: t('messages.helloWorld'), newThread: true })}
             >
-              Trigger Conversation
+              {t('buttons.triggerConversation')}
             </button>
           </div>
         </div>

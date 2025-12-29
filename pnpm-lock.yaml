@@ -132,12 +132,18 @@ importers:
       '@xpert-ai/chatkit-types':
         specifier: workspace:*
         version: link:../../../packages/chatkit
+      i18next:
+        specifier: ^23.16.8
+        version: 23.16.8
       react:
         specifier: ^19.0.0
         version: 19.2.3
       react-dom:
         specifier: ^19.0.0
         version: 19.2.3(react@19.2.3)
+      react-i18next:
+        specifier: ^15.4.1
+        version: 15.7.4(i18next@23.16.8)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
       zustand:
         specifier: ^5.0.8
         version: 5.0.9(@types/react@19.2.7)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
