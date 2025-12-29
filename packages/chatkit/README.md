@@ -1,15 +1,9 @@
-# @xpert-ai/chatkit-types
+# ChatKit Types
 
-## Publishing
+This package is the type-definition library for ChatKit, providing unified, reusable API types for the ChatKit project.
 
-Quick local publish (interactive)
+## Role in the ChatKit project
 
-```bash
-cd packages/chatkit
-# (optional) generate/verify type declarations
-pnpm run build
-# increment version (optional but recommended)
-pnpm version patch
-# publish (scoped packages require --access public)
-npm publish --access public --otp=
-```
+- Exposes the interface signatures and event types of `XpertAIChatKit`, ensuring consistency between integrators and internal implementation.
+- Aggregates core chat-related types (such as `ChatKitOptions`, messages, attachments, widgets, interrupts) for reuse by the UI package and business side.
+- Serves as a standalone types package so that the ChatKit Web Component and the XpertAI platform can obtain type hints and validation without bringing in implementation code.
