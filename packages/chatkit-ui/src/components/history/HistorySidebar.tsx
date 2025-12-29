@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { History, MessageSquare, PlusCircle, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
@@ -27,87 +28,6 @@ export type HistorySidebarProps = {
   showDelete?: boolean;
   disabled?: boolean;
 };
-
-// History icon
-function HistoryIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-      <path d="M12 7v5l4 2" />
-    </svg>
-  );
-}
-
-// Plus icon for new chat
-function PlusCircleIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="M8 12h8M12 8v8" />
-    </svg>
-  );
-}
-
-// Message icon for conversation
-function MessageIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
-
-// Trash icon for delete
-function TrashIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 6h18" />
-      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-    </svg>
-  );
-}
 
 export function HistorySidebar({
   conversations = [],
@@ -140,7 +60,7 @@ export function HistorySidebar({
           disabled={disabled}
           className="h-8 w-8 cursor-pointer"
         >
-          <HistoryIcon />
+          <History size={18} />
           <span className="sr-only">{t('history.conversationHistory')}</span>
         </Button>
       </SheetTrigger>
@@ -155,7 +75,7 @@ export function HistorySidebar({
             className="w-full justify-start gap-2"
             variant="secondary"
           >
-            <PlusCircleIcon />
+            <PlusCircle size={16} />
             {t('history.newChat')}
           </Button>
         </div>
@@ -179,7 +99,7 @@ export function HistorySidebar({
                     onClick={() => handleSelectConversation(conversation.id)}
                   >
                     <span className="text-muted-foreground">
-                      <MessageIcon />
+                      <MessageSquare size={16} />
                     </span>
                     <span className="flex-1 truncate">{conversation.title}</span>
                     {showDelete && onDeleteConversation && (
@@ -191,7 +111,7 @@ export function HistorySidebar({
                         }}
                         className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"
                       >
-                        <TrashIcon />
+                        <Trash2 size={14} />
                       </button>
                     )}
                   </div>

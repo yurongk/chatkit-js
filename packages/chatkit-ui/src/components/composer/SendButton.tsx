@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ArrowUp, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export type SendButtonProps = {
@@ -8,40 +9,6 @@ export type SendButtonProps = {
   stopLabel?: string;
   sendLabel?: string;
 };
-
-// Upward arrow icon
-function ArrowUpIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 19V5M5 12l7-7 7 7" />
-    </svg>
-  );
-}
-
-// Stop icon (square)
-function StopIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-    >
-      <rect x="4" y="4" width="16" height="16" rx="2" />
-    </svg>
-  );
-}
 
 export function SendButton({
   disabled = false,
@@ -63,7 +30,7 @@ export function SendButton({
         )}
         aria-label={stopLabel}
       >
-        <StopIcon />
+        <Square size={14} fill="currentColor" stroke="currentColor" strokeWidth={0} />
       </button>
     );
   }
@@ -81,7 +48,7 @@ export function SendButton({
       )}
       aria-label={sendLabel}
     >
-      <ArrowUpIcon />
+      <ArrowUp size={18} strokeWidth={2.5} />
     </button>
   );
 }

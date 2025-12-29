@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { FileText, Pencil, X } from 'lucide-react';
 
 import type { ChatMessage, Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
@@ -487,20 +488,7 @@ export function Chat({
               )}
               title={t('history.newConversation')}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
+              <Pencil size={16} />
             </button>
             <HistorySidebar
               conversations={conversations}
@@ -660,40 +648,14 @@ export function Chat({
                 key={`${file.name}-${index}`}
                 className="flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-muted-foreground"
-                >
-                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
+                <FileText size={14} className="text-muted-foreground" />
                 <span className="max-w-[120px] truncate">{file.name}</span>
                 <button
                   type="button"
                   onClick={() => handleRemoveAttachment(index)}
                   className="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
+                  <X size={12} />
                 </button>
               </div>
             ))}
@@ -711,19 +673,7 @@ export function Chat({
               onClick={() => setSelectedTool(null)}
               className="rounded-full p-0.5 text-muted-foreground hover:bg-muted"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              <X size={12} />
             </button>
           </div>
         )}
