@@ -44,6 +44,7 @@ const initialClientSecret =
 
 // Parse options from URL on initial load
 const initialOptions = decodeOptionsFromUrl();
+console.log('[chatkit-ui] Initial options from URL:', initialOptions);
 
 const AppContainer = () => {
   const [clientSecret, setClientSecret] = React.useState(initialClientSecret);
