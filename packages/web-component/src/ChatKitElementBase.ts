@@ -17,8 +17,6 @@ import { getCapabilities } from "@xpert-ai/chatkit-web-shared"
 import type { Capabilities, Capability } from "@xpert-ai/chatkit-web-shared"
 import { IntegrationError, fromPossibleFrameSafeError } from "@xpert-ai/chatkit-web-shared"
 
-const CHATKIT_FRAME_URL = import.meta.env.VITE_CHATKIT_FRAME_URL
-
 // Compute inner options by removing methods (to make options serializable)
 function getInnerOptions(options: ChatKitOptions): ChatKitInnerOptions {
   return removeMethods(options) as ChatKitInnerOptions
@@ -61,6 +59,7 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
   protected abstract sanitizeOptions(options: TRawOptions): ChatKitOptions
 
   #opts?: ChatKitOptions
+  #frameUrl?: string
   #frame?: HTMLIFrameElement
   #wrapper?: HTMLDivElement
 
@@ -77,7 +76,7 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
       return customFetch ? customFetch(...args) : fetch(...args)
     }) as typeof fetch,
     target: () => this.#frame?.contentWindow ?? null,
-    targetOrigin: new URL(CHATKIT_FRAME_URL, window.location.origin).origin,
+    targetOrigin: window.location.origin,
     handlers: {
       onFileInputClick: ({ inputAttributes }) => {
         return new Promise<File[]>((resolve) => {
@@ -196,6 +195,35 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
   #setOptionsDataAttributes(options: ChatKitOptions) {
     this.dataset.colorScheme =
       typeof options.theme === "string" ? options.theme : options.theme?.colorScheme ?? "light"
+  }
+
+  #getFrameUrl() {
+    if (!this.#frameUrl) {
+      throw new IntegrationError(
+        "ChatKit frameUrl is not configured. Provide it via setOptions({ frameUrl }) before mounting.",
+      )
+    }
+    return this.#frameUrl
+  }
+
+  #setFrameUrl(frameUrl: string) {
+    if (this.#initialized && this.#frameUrl && this.#frameUrl !== frameUrl) {
+      throw new IntegrationError(
+        "ChatKit frameUrl cannot be changed after initialization. Create a new element to use a different URL.",
+      )
+    }
+    this.#frameUrl = frameUrl
+  }
+
+  #consumeFrameUrl(options: ChatKitOptions) {
+    if (!("frameUrl" in options)) return
+    const frameUrl = options.frameUrl
+    delete options.frameUrl
+    if (frameUrl == null) return
+    if (typeof frameUrl !== "string" || frameUrl.trim() === "") {
+      throw new IntegrationError("ChatKit frameUrl must be a non-empty string.")
+    }
+    this.#setFrameUrl(frameUrl)
   }
 
   #handleFrameLoad = () => {
@@ -317,7 +345,8 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
     }
     this.#initialized = true
     this.#setOptionsDataAttributes(this.#opts)
-    const frameURL = new URL(CHATKIT_FRAME_URL, window.location.origin)
+    const frameURL = new URL(this.#getFrameUrl(), window.location.origin)
+    this.#messenger.setTargetOrigin(frameURL.origin)
     frameURL.hash = encodeBase64({
       options: getInnerOptions(this.#opts),
       referrer: window.location.origin,
@@ -351,6 +380,7 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
   setOptions(newOptions: TRawOptions) {
     try {
       const sanitized = this.sanitizeOptions(newOptions)
+      this.#consumeFrameUrl(sanitized)
       this.applySanitizedOptions(sanitized)
     } catch (error) {
       this.#emitAndThrow(

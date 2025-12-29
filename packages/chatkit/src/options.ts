@@ -280,6 +280,11 @@ type HostedApiConfig = {
 };
 
 export type ChatKitOptions = {
+  /**
+   * ChatKit iframe URL for web component integrations.
+   */
+  frameUrl?: string;
+
   api: CustomApiConfig | HostedApiConfig;
 
   /**
