@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useChatKit, ChatKit } from '@xpert-ai/chatkit-react';
-import { ChatKitOptions, ClientToolMessageInput, filterPlaygroundOptions } from '@xpert-ai/chatkit-types';
+import { ChatKitOptions, ClientToolMessageInput } from '@xpert-ai/chatkit-types';
 import { useAppStore } from './store/useAppStore';
 
 // ============================================================================
@@ -59,9 +59,6 @@ const playgroundConfig: Partial<ChatKitOptions> = {
   },
 };
 
-// Filter playground config (keep only whitelisted items)
-const filteredPlaygroundConfig = filterPlaygroundOptions(playgroundConfig);
-
 // Final config
 export default function App() {
   const xpertApiUrl = (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ?? '';
@@ -69,15 +66,11 @@ export default function App() {
   const assistantId = (import.meta.env.VITE_CHATKIT_XPERT_ID as string | undefined) ?? '';
   const frameUrl = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
 
-  const chatkitOptions: Partial<ChatKitOptions> = {
-    ...filteredPlaygroundConfig,
-    frameUrl,
-  }
-
   const setChatkit = useAppStore((state) => state.setChatkit);
 
   const chatkit = useChatKit({
-    ...chatkitOptions,
+    ...playgroundConfig,
+    frameUrl,
     api: {
       apiUrl: xpertApiUrl,
       xpertId: assistantId,
@@ -130,7 +123,7 @@ export default function App() {
     console.log('Managed Chatkit Example with React Component');
     console.log('Backend:', backendOrigin || '(using proxy)');
     console.log('Assistant ID:', assistantId);
-    console.log('Theme:', chatkitOptions.theme);
+    console.log('Theme:', playgroundConfig.theme);
   }, [backendOrigin, assistantId]);
 
   return (
@@ -155,7 +148,7 @@ export default function App() {
           <div className="pt-2 border-t">
             <strong>Theme Config:</strong>
             <pre className="mt-1 p-2 bg-gray-100 rounded text-[10px] overflow-auto max-h-40">
-              {JSON.stringify(chatkitOptions.theme, null, 2)}
+              {JSON.stringify(playgroundConfig.theme, null, 2)}
             </pre>
           </div>
 
