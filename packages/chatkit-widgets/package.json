@@ -1,6 +1,6 @@
 {
-  "name": "@a2ui/react",
-  "version": "0.8.1",
+  "name": "@xpert-ai/a2ui-react",
+  "version": "0.0.1",
   "description": "A2UI React Renderer with ShadCN UI components",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
