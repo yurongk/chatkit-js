@@ -17,6 +17,7 @@ export default function App() {
   const [locale, setLocale] = useState<SupportedLocale>(() => getLanguage());
   const backendOrigin = (import.meta.env.VITE_BACKEND_ORIGIN as string | undefined) ?? '';
   const assistantId = (import.meta.env.VITE_CHATKIT_ASSISTANT_ID as string | undefined) ?? '';
+  const frameUrl = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
 
   const {
     excelData,
@@ -71,6 +72,7 @@ export default function App() {
         text: t('chatkit.header.title'),
       },
     },
+    frameUrl
   }), [locale, t]);
 
   const chatkit = useChatKit({

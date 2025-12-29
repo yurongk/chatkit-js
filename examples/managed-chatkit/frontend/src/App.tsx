@@ -4,9 +4,9 @@ import { ChatKitOptions, ClientToolMessageInput, filterPlaygroundOptions } from 
 import { useAppStore } from './store/useAppStore';
 
 // ============================================================================
-// Playground 配置 - 从 https://chatkit.studio/playground 复制过来的配置
-// 只有白名单内的配置项会生效: theme, composer, startScreen, api
-// 其他配置项(如 threadItemActions.feedback)会被自动过滤掉
+// Playground config - copied from https://chatkit.studio/playground
+// Only whitelisted options take effect: theme, composer, startScreen, api
+// Other options (e.g., threadItemActions.feedback) are automatically filtered out
 // ============================================================================
 const playgroundConfig: Partial<ChatKitOptions> = {
   theme: {
@@ -41,7 +41,7 @@ const playgroundConfig: Partial<ChatKitOptions> = {
           src: 'https://fonts.gstatic.com/s/jetbrainsmono/v23/tDbV2o-flEEny0FZhsfKu5WU4xD1OwGtT0rU3BE.woff2',
           unicodeRange: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF'
         }
-      // ...and 9 more font sources
+        // ...and 9 more font sources
       ]
     }
   },
@@ -76,20 +76,21 @@ const playgroundConfig: Partial<ChatKitOptions> = {
   },
 };
 
-// 过滤 playground 配置（只保留白名单项）
+// Filter playground config (keep only whitelisted items)
 const filteredPlaygroundConfig = filterPlaygroundOptions(playgroundConfig);
 
-// 最终配置
-const chatkitOptions: Partial<ChatKitOptions> = {
-  ...filteredPlaygroundConfig,
-}
-
+// Final config
 export default function App() {
   const backendOrigin = (import.meta.env.VITE_BACKEND_ORIGIN as string | undefined) ?? '';
   const assistantId = (import.meta.env.VITE_CHATKIT_ASSISTANT_ID as string | undefined) ?? '';
-  const chatkitTarget = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
+  const frameUrl = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
 
-   const setChatkit = useAppStore((state) => state.setChatkit);
+  const chatkitOptions: Partial<ChatKitOptions> = {
+    ...filteredPlaygroundConfig,
+    frameUrl,
+  }
+
+  const setChatkit = useAppStore((state) => state.setChatkit);
 
   const chatkit = useChatKit({
     ...chatkitOptions,
@@ -159,7 +160,7 @@ export default function App() {
           <div>
             <strong>Chatkit URL:</strong>
             <div className="break-all mt-1 p-1 bg-gray-100 rounded text-[10px]">
-              {'xxx'}
+              {frameUrl || '(unset)'}
             </div>
           </div>
           <div>

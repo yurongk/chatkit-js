@@ -100,6 +100,10 @@ export abstract class BaseMessenger<
       onclose?: () => void
     }
   >()
+
+  setTargetOrigin(targetOrigin: string) {
+    this.targetOrigin = targetOrigin
+  }
   private abortControllers = new Map<string, AbortController>()
 
   private sendMessage(data: ChatKitMessage, transfer?: Transferable[]) {
