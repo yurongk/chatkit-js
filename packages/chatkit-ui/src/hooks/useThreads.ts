@@ -70,7 +70,7 @@ const sortConversations = (conversations: ChatConversation[]): ChatConversation[
 };
 
 export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
-  const { client, threadId } = useStreamContext();
+  const { client, threadId, assistantId, isReady } = useStreamContext();
   const [conversationsState, setConversationsState] = React.useState<ChatConversation[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<unknown>(null);
@@ -87,6 +87,7 @@ export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
     setError(null);
     try {
       const { items } = await client.conversations.search({
+        where: { xpertId: assistantId },
         limit,
         order: { updatedAt: 'DESC' },
       });
@@ -97,7 +98,7 @@ export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
     } finally {
       setIsLoading(false);
     }
-  }, [client, limit]);
+  }, [client, limit, assistantId]);
 
   const createConversation = React.useCallback(
     async (input?: CreateConversationInput) => {
@@ -135,10 +136,13 @@ export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
   );
 
   React.useEffect(() => {
+    // Only fetch conversations when the client is authenticated
+    if (!isReady) return;
     void refreshConversations();
-  }, [refreshConversations]);
+  }, [refreshConversations, isReady]);
 
   React.useEffect(() => {
+    if (!isReady) return;
     if (!threadId) return;
     if (conversationsState.some((item) => item.threadId === threadId)) return;
     void client.conversations
@@ -150,7 +154,7 @@ export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
       .catch((err) => {
         setError(err);
       });
-  }, [client, threadId, conversationsState, upsertConversation]);
+  }, [client, threadId, conversationsState, upsertConversation, isReady]);
 
   const conversations = React.useMemo(
     () => conversationsState.map((conversation) => toConversation(conversation)),
