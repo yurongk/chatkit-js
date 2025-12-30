@@ -92,7 +92,6 @@ export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
         order: { updatedAt: 'DESC' },
       });
       setConversationsState(items ?? []);
-      console.log('Conversations refreshed', items);
     } catch (err) {
       setError(err);
     } finally {

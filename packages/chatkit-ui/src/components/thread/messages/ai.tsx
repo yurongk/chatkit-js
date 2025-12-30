@@ -120,9 +120,6 @@ function MemoryBlock({ content }: { content: TMessageContentMemory }) {
 }
 
 function ComponentBlock({ content }: { content: TMessageContentComponent }) {
-  
-  console.log(content);
-
   const data = (content.data ?? {}) as Record<string, unknown>;
   const title =
     typeof data.title === 'string'

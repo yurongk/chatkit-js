@@ -286,11 +286,6 @@ function adjustAccentByLevel(
 export function ThemeProvider({ children, theme }: ThemeProviderProps) {
   const themeRef = React.useRef<HTMLDivElement>(null);
 
-  // Debug: log theme changes
-  React.useEffect(() => {
-    console.log('[ThemeProvider] Received theme:', theme);
-  }, [theme]);
-
   React.useEffect(() => {
     if (!themeRef.current) return;
     const el = themeRef.current;
