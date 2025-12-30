@@ -242,7 +242,6 @@ export abstract class BaseMessenger<
   }
 
   private handleMessage = async (event: MessageEvent) => {
-    console.log("Received message", event.data, event.origin, this.targetOrigin, event.source, this.target())
     if (
       !event.data ||
       event.data.__xpaiChatKit !== true ||

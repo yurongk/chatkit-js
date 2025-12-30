@@ -1,10 +1,11 @@
 import * as React from 'react';
 import type { ChatKitOptions } from '@xpert-ai/chatkit-types';
+import { A2UIProvider } from "@xpert-ai/a2ui-react";
 import { Chat } from "./components/chat";
 import { StreamProvider } from "./providers/Stream";
 import { ThemeProvider } from "./providers/Theme";
-import { A2UIProvider } from "@xpert-ai/a2ui-react";
 import { setLanguage } from "./i18n";
+import { useParentMessenger } from './hooks/useParentMessenger';
 
 export type AppProps = {
   options?: ChatKitOptions | null;
@@ -12,6 +13,7 @@ export type AppProps = {
 };
 
 export function App({ clientSecret, options }: AppProps) {
+  const { isParentAvailable, sendCommand } = useParentMessenger();
   const apiKey = clientSecret.trim() ? clientSecret : undefined;
   const xpertId = import.meta.env.VITE_XPERTAI_XPERT_ID as string | undefined;
   const apiUrl = import.meta.env.VITE_XPERTAI_API_URL as string | undefined;
@@ -29,7 +31,7 @@ export function App({ clientSecret, options }: AppProps) {
     <ThemeProvider theme={theme}>
       <div className="flex h-screen">
         <A2UIProvider onAction={(action) => {
-          console.log("A2UI Action:", action);
+          if (isParentAvailable) sendCommand('onWidgetAction', { action: action.actionId, widgetItem: action.context });
         }}>
           <StreamProvider apiKey={apiKey} apiUrl={options?.api.apiUrl || apiUrl} xpertId={options?.api.xpertId || xpertId}>
             <Chat

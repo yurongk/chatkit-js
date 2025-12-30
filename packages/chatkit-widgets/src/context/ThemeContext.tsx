@@ -26,6 +26,7 @@ export const defaultTheme: Types.Theme = {
   components: {
     AudioPlayer: {},
     Button: {
+      "cursor-pointer": true,
       "inline-flex": true,
       "items-center": true,
       "justify-center": true,

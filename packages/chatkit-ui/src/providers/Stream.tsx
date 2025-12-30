@@ -333,7 +333,6 @@ function collectClientToolRequests(payload: unknown): ClientToolRequest[] {
 }
 
 function normalizeToolMessagesResponse(response: unknown): ClientToolMessageInput | null {
-  console.log('Tool message response:', response);
   if (!response) return null;
   if (typeof response === 'object' && response !== null) {
     const raw = response as ClientToolMessageInput;
@@ -357,8 +356,6 @@ function applyStreamEvent(
 ) {
   const parsed = parseEventData(chunk.data);
   if (parsed == null) return;
-
-  console.log('Stream event:', chunk.event, parsed);
 
   if (chunk.event === 'error') {
     const message =

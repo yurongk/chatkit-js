@@ -30,6 +30,15 @@ type ParentMessage = ParentCommandMessage | ParentResponseMessage | ParentEventM
 
 type ParentEnvelope = Partial<ParentMessage> & { __xpaiChatKit: true };
 
+interface ClientCommandPayloads {
+  onClientToolCall: unknown;
+  onGetClientSecret: unknown;
+  onWidgetAction: {
+    action: string;
+    widgetItem: unknown;
+  };
+}
+
 const getParentOrigin = () => {
   if (typeof document === "undefined" || !document.referrer) return "*";
   try {
@@ -48,11 +57,11 @@ const createNonce = () => {
 
 export type ParentMessenger = {
   isParentAvailable: boolean;
-  sendCommand: (
-    command: 'onClientToolCall' | 'onGetClientSecret',
-    data?: unknown,
-    transfer?: Transferable[],
-  ) => Promise<unknown>;
+  sendCommand: <C extends keyof ClientCommandPayloads>(
+      command: C,
+      data?: ClientCommandPayloads[C],
+      transfer?: Transferable[],
+    ) => Promise<unknown>;
   sendEvent: (event: string, data?: [string, unknown], transfer?: Transferable[]) => void;
 };
 
