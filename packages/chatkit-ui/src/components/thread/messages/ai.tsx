@@ -70,7 +70,7 @@ function ReasoningBlock({ reasoning }: { reasoning: TMessageContentReasoning[] }
           key={item.id ?? `reasoning-${index}`}
           className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground"
         >
-          <p className="whitespace-pre-wrap break-words leading-relaxed">{item.text}</p>
+          <p className="whitespace-pre-wrap wrap-break-word leading-relaxed">{item.text}</p>
         </div>
       ))}
     </div>
@@ -113,7 +113,7 @@ function MemoryBlock({ content }: { content: TMessageContentMemory }) {
         <Badge variant="secondary">Memory</Badge>
       </CardHeader>
       <CardContent className="text-xs text-muted-foreground">
-        <pre className="whitespace-pre-wrap break-words">{safeJson(content.data ?? [])}</pre>
+        <pre className="whitespace-pre-wrap wrap-break-word">{safeJson(content.data ?? [])}</pre>
       </CardContent>
     </Card>
   );
@@ -228,7 +228,7 @@ function renderContentItem(
   );
 }
 
-function renderContent(content: ChatkitMessage['content'], messageId: string) {
+function renderContent(content: ChatkitMessage['content'] | any, messageId: string) {
   if (typeof content === 'string') {
     if (!content.trim()) return null;
     return <MarkdownText>{content}</MarkdownText>;
@@ -244,10 +244,10 @@ function renderContent(content: ChatkitMessage['content'], messageId: string) {
 }
 
 export function AssistantMessage({ message, className, isStreaming = false }: AssistantMessageProps) {
-  const hasContent =
-    message.content != null &&
+  const content = message.content as any;
+  const hasContent = content != null &&
     !(
-      (typeof message.content === 'string' && message.content.trim() === '') ||
+      (typeof content === 'string' && content.trim() === '') ||
       (Array.isArray(message.content) && message.content.length === 0)
     );
   const hasReasoning =
