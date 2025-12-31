@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { ChatKitOptions, SendUserMessageParams } from "@xpert-ai/chatkit-types";
+import { STATE_VARIABLE_HUMAN, type ChatKitOptions, type SendUserMessageParams } from "@xpert-ai/chatkit-types";
 import { useStreamManager } from "./useStream";
 
 type CommandMessageMap = {
@@ -140,7 +140,6 @@ export function useParentMessenger(
     };
 
     const handleMessage = (event: MessageEvent) => {
-      console.log(`handleMessage`, event);
       if (event.source !== window.parent) return;
       if (!event.data || typeof event.data !== "object") return;
       if (
@@ -167,6 +166,12 @@ export function useParentMessenger(
         streamRef.current?.submit({
           input: {
             input: params.text,
+          },
+          state: {
+            ...(params.state || {}),
+            [STATE_VARIABLE_HUMAN]: {
+              input: params.text,
+            }
           }
         }, {
           newThread: params.newThread,
