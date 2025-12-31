@@ -6,6 +6,7 @@ export type EventHandler<K extends keyof ChatKitEvents> = (
 
 export type SendUserMessageParams = {
   text: string;
+  state?: Record<string, any>;
   reply?: string;
   attachments?: Attachment[];
   newThread?: boolean;

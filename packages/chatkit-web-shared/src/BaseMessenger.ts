@@ -336,7 +336,6 @@ export abstract class BaseMessenger<
         break
       }
       case "command": {
-        console.log("Received command", data.command, data.data)
         if (!this.canReceiveCommand(data.command)) {
           this.sendMessage({
             type: "response",
