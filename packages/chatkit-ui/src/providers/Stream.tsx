@@ -11,7 +11,6 @@ import { useQueryState } from 'nuqs';
 import {
   Client,
   type Checkpoint,
-  type Command,
   type Config,
   type StreamMode,
 } from '@xpert-ai/xpert-sdk';
@@ -30,13 +29,14 @@ export type StreamSubmitOptions = {
     | Partial<StateType>
     | ((prev: StateType) => Partial<StateType>);
   context?: Record<string, unknown>;
-  command?: Command;
+  // command?: Command;
   config?: Config;
   checkpoint?: Omit<Checkpoint, 'thread_id'> | null;
   streamMode?: StreamMode | StreamMode[];
   streamSubgraphs?: boolean;
   streamResumable?: boolean;
   threadId?: string;
+  newThread?: boolean;
 };
 
 export type StreamContextType = {
@@ -611,12 +611,20 @@ const StreamSession = ({
       input?: TChatRequest | null,
       options?: StreamSubmitOptions,
     ) => {
+      if (isLoading) {
+        return;
+      }
       setError(null);
       lastStreamOptionsRef.current = {
         streamMode: options?.streamMode,
         streamSubgraphs: options?.streamSubgraphs,
         streamResumable: options?.streamResumable,
       };
+      const shouldStartNewThread = options?.newThread === true;
+      if (shouldStartNewThread) {
+        setValues({ messages: [] });
+        lastExecutionIdRef.current = null;
+      }
       const optimistic = options?.optimisticValues;
       if (optimistic) {
         setValues((prev) => applyOptimisticValues(prev, optimistic));
@@ -624,6 +632,9 @@ const StreamSession = ({
 
       let nextThreadId = threadId ?? null;
       const desiredThreadId = options?.threadId ?? null;
+      if (shouldStartNewThread) {
+        nextThreadId = null;
+      }
       if (!nextThreadId && desiredThreadId) {
         const created = await client.threads.create({
           threadId: desiredThreadId,
@@ -651,7 +662,6 @@ const StreamSession = ({
         const stream = client.runs.stream(nextThreadId, assistantId, {
           input: input ?? null,
           context: options?.context,
-          command: options?.command,
           config: options?.config,
           checkpoint: options?.checkpoint ?? undefined,
           streamMode: options?.streamMode,
@@ -685,7 +695,7 @@ const StreamSession = ({
         setIsLoading(false);
       }
     },
-    [assistantId, client, handleInterrupt, setThreadId, sendEvent, threadId],
+    [assistantId, client, handleInterrupt, isLoading, setThreadId, sendEvent, threadId],
   );
 
   submitRef.current = submit;

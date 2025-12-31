@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { ChatKitOptions } from "@xpert-ai/chatkit-types";
+import type { ChatKitOptions, SendUserMessageParams } from "@xpert-ai/chatkit-types";
 import { useStreamManager } from "./useStream";
 
-type ParentCommandMessage = {
+type CommandMessageMap = {
+  onSendUserMessage: SendUserMessageParams
+  onSetOptions: ChatKitOptions | null;
+  onClientToolCall: unknown;
+  onGetClientSecret: unknown;
+  onWidgetAction: {
+    action: string;
+    widgetItem: unknown;
+  }
+}
+
+type ParentCommandMessage<K extends keyof CommandMessageMap = keyof CommandMessageMap> = {
   type: "command";
   nonce: string;
-  command: string;
-  data: unknown;
+  command: K;
+  data: CommandMessageMap[K];
 };
 
 type ParentResponseMessage = {
@@ -30,14 +41,33 @@ type ParentMessage = ParentCommandMessage | ParentResponseMessage | ParentEventM
 
 type ParentEnvelope = Partial<ParentMessage> & { __xpaiChatKit: true };
 
-interface ClientCommandPayloads {
-  onClientToolCall: unknown;
-  onGetClientSecret: unknown;
-  onWidgetAction: {
-    action: string;
-    widgetItem: unknown;
-  };
-}
+type MessageHandler = (event: MessageEvent) => void;
+
+const messageHandlers = new Set<MessageHandler>();
+let isListenerAttached = false;
+const handledSendUserMessageNonces = new Set<string>();
+const handledSendUserMessageEvents = new WeakSet<MessageEvent>();
+
+const sharedMessageHandler: MessageHandler = (event) => {
+  messageHandlers.forEach((handler) => handler(event));
+};
+
+const attachMessageListener = () => {
+  if (typeof window === "undefined") return;
+  if (isListenerAttached) return;
+  window.addEventListener("message", sharedMessageHandler);
+  isListenerAttached = true;
+  console.warn(`addEventListener message handleMessage`);
+};
+
+const detachMessageListener = () => {
+  if (typeof window === "undefined") return;
+  if (!isListenerAttached) return;
+  if (messageHandlers.size > 0) return;
+  window.removeEventListener("message", sharedMessageHandler);
+  isListenerAttached = false;
+  console.warn(`removeEventListener message handleMessage`);
+};
 
 const getParentOrigin = () => {
   if (typeof document === "undefined" || !document.referrer) return "*";
@@ -57,9 +87,9 @@ const createNonce = () => {
 
 export type ParentMessenger = {
   isParentAvailable: boolean;
-  sendCommand: <C extends keyof ClientCommandPayloads>(
+  sendCommand: <C extends keyof CommandMessageMap>(
       command: C,
-      data?: ClientCommandPayloads[C],
+      data?: CommandMessageMap[C],
       transfer?: Transferable[],
     ) => Promise<unknown>;
   sendEvent: (event: string, data?: [string, unknown], transfer?: Transferable[]) => void;
@@ -110,6 +140,7 @@ export function useParentMessenger(
     };
 
     const handleMessage = (event: MessageEvent) => {
+      console.log(`handleMessage`, event);
       if (event.source !== window.parent) return;
       if (!event.data || typeof event.data !== "object") return;
       if (
@@ -123,10 +154,22 @@ export function useParentMessenger(
       const payload = event.data as Partial<ParentEnvelope>;
       if (payload.__xpaiChatKit !== true) return;
       if (payload.type == "command" && payload.command === "onSendUserMessage") {
+        const nonce = typeof payload.nonce === "string" ? payload.nonce : null;
+        if (nonce) {
+          if (handledSendUserMessageNonces.has(nonce)) return;
+          handledSendUserMessageNonces.add(nonce);
+        } else {
+          if (handledSendUserMessageEvents.has(event)) return;
+          handledSendUserMessageEvents.add(event);
+        }
+
+        const params = payload.data as SendUserMessageParams
         streamRef.current?.submit({
           input: {
-            input: (payload.data as { text: string }).text as string,
+            input: params.text,
           }
+        }, {
+          newThread: params.newThread,
         });
         if (payload.nonce) {
           sendResponse(payload.nonce, { ok: true });
@@ -157,18 +200,20 @@ export function useParentMessenger(
       pendingRef.current.delete(payload.nonce);
     };
 
-    window.addEventListener("message", handleMessage);
+    messageHandlers.add(handleMessage);
+    attachMessageListener();
     return () => {
-      window.removeEventListener("message", handleMessage);
+      messageHandlers.delete(handleMessage);
+      detachMessageListener();
       pendingRef.current.forEach((handler) => {
         handler.reject(new Error("Parent messenger closed"));
       });
       pendingRef.current.clear();
     };
-  }, [isParentAvailable]);
+  }, [isParentAvailable, streamRef]);
 
   const sendCommand = useCallback(
-    (command: string, data?: unknown, transfer?: Transferable[]) => {
+    <K extends keyof CommandMessageMap>(command: K, data?: CommandMessageMap[K], transfer?: Transferable[]) => {
       if (!isParentAvailable) {
         return Promise.reject(new Error("Parent window not available"));
       }

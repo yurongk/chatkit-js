@@ -370,14 +370,14 @@ export function Chat({
       setActiveConversationId(matched.id);
       return;
     }
-    void loadConversationMessages(matched.id, matched.threadId ?? null);
+    // void loadConversationMessages(matched.id, matched.threadId ?? null);
   }, [
     conversations,
     stream.threadId,
     messages.length,
     activeConversationId,
     isHistoryLoading,
-    loadConversationMessages,
+    // loadConversationMessages,
   ]);
 
   const handleNewConversation = async () => {

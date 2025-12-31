@@ -4,6 +4,13 @@ export type EventHandler<K extends keyof ChatKitEvents> = (
   event: ChatKitEvents[K],
 ) => any;
 
+export type SendUserMessageParams = {
+  text: string;
+  reply?: string;
+  attachments?: Attachment[];
+  newThread?: boolean;
+}
+
 /**
  * strategies to host files before attaching them to messages.
  */
@@ -81,12 +88,7 @@ export interface XpertAIChatKit extends HTMLElement {
   ): Promise<void>;
 
   /** Sends a user message. */
-  sendUserMessage(params: {
-    text: string;
-    reply?: string;
-    attachments?: Attachment[];
-    newThread?: boolean;
-  }): Promise<void>;
+  sendUserMessage(params: SendUserMessageParams): Promise<void>;
 
   /** Sets the composer's content without sending a message. */
   setComposerValue(params: {
