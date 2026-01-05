@@ -199,7 +199,7 @@ app = FastAPI()
 async def create_session():
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            "https://api.xpertai.com/v1/chatkit/sessions",
+            "Fill in the URL of the agent platform you use",
             headers={
                 "Authorization": f"Bearer {XPERTAI_API_KEY}",
                 "Content-Type": "application/json",
