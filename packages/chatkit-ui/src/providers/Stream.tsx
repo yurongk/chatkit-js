@@ -41,6 +41,7 @@ export type StreamSubmitOptions = {
 
 export type StreamContextType = {
   client: Client<StateType>;
+  apiUrl: string;
   assistantId: string;
   threadId: string | null;
   values: StateType;
@@ -705,6 +706,7 @@ const StreamSession = ({
 
   const value: StreamContextType = {
     client,
+    apiUrl,
     assistantId,
     threadId: threadId ?? null,
     values,
