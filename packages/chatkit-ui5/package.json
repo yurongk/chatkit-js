@@ -1,0 +1,52 @@
+{
+  "name": "@xpert-ai/chatkit-ui5",
+  "version": "0.0.1",
+  "description": "SAP UI5 bindings for Xpert ChatKit",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {},
+  "dependencies": {
+    "@xpert-ai/chatkit-types": "workspace:*",
+    "@xpert-ai/chatkit-web-component": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0",
+    "vite-plugin-dts": "^3.7.0",
+    "vitest": "^3.2.4"
+  },
+  "keywords": [
+    "chatkit",
+    "ui5",
+    "sap",
+    "fiori",
+    "xpert"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": false
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xpert-ai/chatkit-js"
+  }
+}
