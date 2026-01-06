@@ -1,8 +1,37 @@
 import * as React from 'react';
-import { FileText, Pencil, X } from 'lucide-react';
+import { FileText, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
 
 import type { ChatMessage, Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
+
+/**
+ * Represents a file stored on the server.
+ * Returned by the file upload API.
+ */
+interface StorageFile {
+  id: string;
+  file: string;
+  url?: string;
+  originalName?: string;
+  size?: number;
+  mimetype?: string;
+}
+
+/**
+ * Represents a file being uploaded or already uploaded.
+ */
+type UploadingFile = {
+  /** Local unique ID for tracking */
+  localId: string;
+  /** Original File object */
+  file: File;
+  /** Upload status */
+  status: 'uploading' | 'success' | 'error';
+  /** Server-side file info after successful upload */
+  storageFile?: StorageFile;
+  /** Error message if upload failed */
+  error?: string;
+};
 
 import { cn } from '../lib/utils';
 import { useStreamContext } from '../providers/Stream';
@@ -158,7 +187,7 @@ export function Chat({
 
   const [draft, setDraft] = React.useState('');
   const [selectedTool, setSelectedTool] = React.useState<ToolOption | null>(null);
-  const [attachments, setAttachments] = React.useState<File[]>([]);
+  const [attachments, setAttachments] = React.useState<UploadingFile[]>([]);
   const {
     conversations,
     createConversation,
@@ -208,8 +237,10 @@ export function Chat({
 
   const hasApiKey = Boolean(clientSecret.trim());
   const missingConfig = !apiUrl || !hasApiKey;
+  // Check if any files are still uploading (moved up for use in isSendDisabled)
+  const hasUploadingFiles = attachments.some((a) => a.status === 'uploading');
   const isSendDisabled =
-    !trimmedDraft || stream.isLoading || missingConfig || isHistoryLoading;
+    !trimmedDraft || stream.isLoading || missingConfig || isHistoryLoading || hasUploadingFiles;
 
   React.useEffect(() => {
     if (missingConfig) return;
@@ -231,20 +262,45 @@ export function Chat({
       });
   }, [missingConfig, stream.client, stream.assistantId]);
 
+  // Get successfully uploaded files (matching IStorageFile interface)
+  const uploadedFiles = attachments
+    .filter((a) => a.status === 'success' && a.storageFile)
+    .map((a) => ({
+      id: a.storageFile!.id,
+      file: a.storageFile!.file,
+      url: a.storageFile!.url,
+      originalName: a.storageFile!.originalName ?? a.file.name,
+      mimetype: a.storageFile!.mimetype ?? a.file.type,
+      size: a.storageFile!.size ?? a.file.size,
+    }));
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // isSendDisabled already includes hasUploadingFiles check
     if (isSendDisabled) return;
 
-    const newMessage: Message = {
+    // Store files for display in the message
+    const filesToSend = uploadedFiles.length > 0 ? [...uploadedFiles] : undefined;
+
+    const newMessage: Message & { attachments?: typeof uploadedFiles } = {
       id: createMessageId(),
       type: 'human',
       content: trimmedDraft,
+      ...(filesToSend ? { attachments: filesToSend } : {}),
     };
 
     setDraft('');
 
+    // Include files in the submit request
+    const inputPayload: { input: string; files?: typeof uploadedFiles } = {
+      input: trimmedDraft,
+    };
+    if (filesToSend) {
+      inputPayload.files = filesToSend;
+    }
+
     stream.submit(
-      { input: { input: trimmedDraft } },
+      { input: inputPayload },
       {
         optimisticValues: (prev) => {
           const prevMessages = prev?.messages ?? [];
@@ -268,6 +324,47 @@ export function Chat({
     fileInputRef.current?.click();
   };
 
+  // Upload a single file to the server
+  const uploadFile = React.useCallback(async (localId: string, file: File) => {
+    try {
+      const result = await stream.client.contexts.uploadFile<StorageFile>(file);
+      setAttachments((prev) =>
+        prev.map((item) =>
+          item.localId === localId
+            ? { ...item, status: 'success' as const, storageFile: result }
+            : item
+        )
+      );
+    } catch (error) {
+      setAttachments((prev) =>
+        prev.map((item) =>
+          item.localId === localId
+            ? {
+                ...item,
+                status: 'error' as const,
+                error: error instanceof Error ? error.message : 'Upload failed',
+              }
+            : item
+        )
+      );
+    }
+  }, [stream.client]);
+
+  // Retry uploading a failed file
+  const handleRetryUpload = React.useCallback((localId: string) => {
+    const attachment = attachments.find((a) => a.localId === localId);
+    if (!attachment || attachment.status !== 'error') return;
+
+    setAttachments((prev) =>
+      prev.map((item) =>
+        item.localId === localId
+          ? { ...item, status: 'uploading' as const, error: undefined }
+          : item
+      )
+    );
+    void uploadFile(localId, attachment.file);
+  }, [attachments, uploadFile]);
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -275,27 +372,55 @@ export function Chat({
     const maxCount = composer?.attachments?.maxCount ?? 10;
     const maxSize = composer?.attachments?.maxSize ?? 100 * 1024 * 1024; // 100MB default
 
-    const validFiles: File[] = [];
+    const newAttachments: UploadingFile[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (file.size > maxSize) {
         console.warn(`File ${file.name} exceeds max size of ${maxSize} bytes`);
         continue;
       }
-      validFiles.push(file);
+      const localId = createMessageId();
+      newAttachments.push({
+        localId,
+        file,
+        status: 'uploading',
+      });
     }
 
+    // Add new attachments and limit to maxCount
     setAttachments((prev) => {
-      const combined = [...prev, ...validFiles];
+      const combined = [...prev, ...newAttachments];
       return combined.slice(0, maxCount);
+    });
+
+    // Start uploading each file
+    newAttachments.forEach((attachment) => {
+      void uploadFile(attachment.localId, attachment.file);
     });
 
     // Reset the input so the same file can be selected again
     event.target.value = '';
   };
 
-  const handleRemoveAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveAttachment = async (localId: string) => {
+    const attachment = attachments.find((a) => a.localId === localId);
+    if (!attachment) return;
+
+    // If file was uploaded successfully, delete from server
+    if (attachment.status === 'success' && attachment.storageFile?.id) {
+      try {
+        await fetch(`${stream.apiUrl}/contexts/file/${attachment.storageFile.id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${clientSecret}`,
+          },
+        });
+      } catch {
+        // Still remove from local state even if server delete fails
+      }
+    }
+
+    setAttachments((prev) => prev.filter((item) => item.localId !== localId));
   };
 
   const handleToolSelect = (tool: ToolOption) => {
@@ -573,17 +698,37 @@ export function Chat({
                             }}
                             isStreaming={stream.isLoading && index === messages.length - 1}
                           />
-                        ) : Array.isArray(message.content) ? (
-                          message.content.map((part, partIndex) => (
-                            <p
-                              key={`${part.type}-${partIndex}`}
-                              className="break-words text-sm leading-relaxed"
-                            >
-                              {formatMessageContent(part as any)}
-                            </p>
-                          ))
                         ) : (
-                          formatMessageContent(message.content)
+                          <>
+                            {/* Show attachments for human messages */}
+                            {message.type === 'human' && (message as any).attachments?.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                {((message as any).attachments as Array<{ originalName: string; mimetype: string }>).map((file, fileIndex) => (
+                                  <div
+                                    key={fileIndex}
+                                    className="flex items-center gap-1.5 rounded-md bg-primary-foreground/20 px-2 py-1 text-xs"
+                                  >
+                                    <FileText size={12} />
+                                    <span className="max-w-[100px] truncate">{file.originalName}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {Array.isArray(message.content) ? (
+                              message.content.map((part, partIndex) => (
+                                <p
+                                  key={`${part.type}-${partIndex}`}
+                                  className="break-words text-sm leading-relaxed"
+                                >
+                                  {formatMessageContent(part as any)}
+                                </p>
+                              ))
+                            ) : (
+                              <span className="break-words text-sm leading-relaxed">
+                                {formatMessageContent(message.content)}
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                       {/* Message actions - hidden during streaming, retry only for last AI message */}
@@ -643,17 +788,55 @@ export function Chat({
         {/* Attachments preview */}
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2">
-            {attachments.map((file, index) => (
+            {attachments.map((item) => (
               <div
-                key={`${file.name}-${index}`}
-                className="flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm"
+                key={item.localId}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1 text-sm",
+                  item.status === 'error' ? 'bg-destructive/10 border border-destructive/30' : 'bg-muted'
+                )}
               >
-                <FileText size={14} className="text-muted-foreground" />
-                <span className="max-w-[120px] truncate">{file.name}</span>
+                {/* Status icon */}
+                {item.status === 'uploading' && (
+                  <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                )}
+                {item.status === 'success' && (
+                  <FileText size={14} className="text-muted-foreground" />
+                )}
+                {item.status === 'error' && (
+                  <FileText size={14} className="text-destructive" />
+                )}
+
+                {/* File name */}
+                <span className={cn(
+                  "max-w-[120px] truncate",
+                  item.status === 'error' && 'text-destructive'
+                )}>
+                  {item.file.name}
+                </span>
+
+                {/* Retry button for failed uploads */}
+                {item.status === 'error' && (
+                  <button
+                    type="button"
+                    onClick={() => handleRetryUpload(item.localId)}
+                    className="ml-1 rounded-full p-0.5 text-destructive hover:bg-destructive/20"
+                    title={t('chat.retryUpload')}
+                  >
+                    <RefreshCw size={12} />
+                  </button>
+                )}
+
+                {/* Remove button */}
                 <button
                   type="button"
-                  onClick={() => handleRemoveAttachment(index)}
-                  className="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                  onClick={() => handleRemoveAttachment(item.localId)}
+                  className={cn(
+                    "ml-1 rounded-full p-0.5",
+                    item.status === 'error'
+                      ? 'text-destructive hover:bg-destructive/20'
+                      : 'hover:bg-muted-foreground/20'
+                  )}
                 >
                   <X size={12} />
                 </button>
