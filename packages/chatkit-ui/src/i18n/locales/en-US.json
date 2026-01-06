@@ -8,6 +8,7 @@
     "loadingConversation": "Loading conversation...",
     "stop": "Stop",
     "send": "Send message",
+    "retryUpload": "Retry upload",
     "poweredBy": "Powered by Xpert AI",
     "errors": {
       "loadMessages": "Failed to load conversation messages",
