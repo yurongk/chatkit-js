@@ -1,0 +1,44 @@
+name: Request a New ChatKit Feature
+description: Propose a new capability or enhancement for ChatKit SDKs, UI components, or tooling.
+title: "[ChatKit Feature]: "
+labels: ["feature-request"]
+body:
+  - type: input
+    id: feature-name
+    attributes:
+      label: Feature Name
+      description: What do you want this ChatKit feature to be called?
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-to-solve
+    attributes:
+      label: Problem to Solve
+      description: What pain point or missing capability are you trying to address? Provide context such as user journey or integration gaps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Outline the desired behavior, API shape, UI change, or configuration. Include examples of requests, responses, or user flows if relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: usage-scenarios
+    attributes:
+      label: Usage Scenarios
+      description: How and where would you use this feature? Mention product area (SDK, UI, web components, widgets) and target users.
+    validations:
+      required: true
+
+  - type: input
+    id: references
+    attributes:
+      label: References or Links
+      description: Share related examples, docs, or prior art that illustrate the desired experience.
+    validations:
+      required: false
