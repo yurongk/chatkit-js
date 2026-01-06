@@ -8,6 +8,7 @@
     "loadingConversation": "正在加载对话...",
     "stop": "停止",
     "send": "发送消息",
+    "retryUpload": "重新上传",
     "poweredBy": "由 Xpert AI 驱动",
     "errors": {
       "loadMessages": "加载对话消息失败",
