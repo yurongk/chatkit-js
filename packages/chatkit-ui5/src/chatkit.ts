@@ -26,6 +26,8 @@ export type ChatKitEventHandlers = Partial<{
 export type ChatKitUI5Config = ChatKitOptions & ChatKitEventHandlers;
 
 type ListenerCleanup = (() => void) | undefined;
+// Some event-like properties are handled directly by the web component and should stay in options.
+const EXCLUDED_HANDLER_KEYS = new Set(['onClientTool']);
 
 const CHATKIT_METHOD_NAMES = Object.freeze([
   'focusComposer',
@@ -37,6 +39,11 @@ const CHATKIT_METHOD_NAMES = Object.freeze([
 ] as const);
 
 type ChatKitMethod = (typeof CHATKIT_METHOD_NAMES)[number];
+type ChatKitMethodParams<K extends ChatKitMethod> = XpertAIChatKit[K] extends (
+  ...args: infer P
+) => any
+  ? P
+  : never;
 
 const EVENT_HANDLER_MAP: {
   [K in keyof ChatKitEvents]: ToEventHandlerKey<K>;
@@ -78,10 +85,14 @@ function splitOptions(value: ChatKitUI5Config | undefined): {
   }
 
   for (const [key, entry] of Object.entries(value)) {
-    if (/^on[A-Z]/.test(key) && key !== 'onClientTool') {
-      (handlers as any)[key] = entry;
+    if (/^on[A-Z]/.test(key) && !EXCLUDED_HANDLER_KEYS.has(key)) {
+      // Excluded handler keys (like onClientTool) stay in options because the web component manages them
+      const handlerKey = key as keyof ChatKitEventHandlers;
+      if (typeof entry === 'function') {
+        Object.assign(handlers, { [handlerKey]: entry });
+      }
     } else {
-      (options as any)[key] = entry;
+      (options as Record<string, unknown>)[key] = entry;
     }
   }
 
@@ -94,15 +105,15 @@ function applyOptions(
   isCurrent: () => boolean,
 ): ListenerCleanup {
   if (typeof customElements === 'undefined') {
-    if (typeof (el as any).setOptions === 'function') {
+    if (typeof el.setOptions === 'function') {
       el.setOptions(options);
     }
-    return;
+    return undefined;
   }
 
   if (customElements.get('xpertai-chatkit')) {
     el.setOptions(options);
-    return;
+    return undefined;
   }
 
   let active = true;
@@ -212,7 +223,11 @@ export const ChatKit = ControlBase.extend('xpertai.chatkit.ui5.ChatKit', {
     const el = this._chatkitEl;
     if (!el) return;
 
-    this._optionsCleanup = applyOptions(el, this._options, () => this.getDomRef() === el);
+    this._optionsCleanup = applyOptions(
+      el,
+      this._options,
+      () => typeof this.getDomRef === 'function' && this.getDomRef() === el,
+    );
   },
   _bindHandlers(this: ChatKitInstance) {
     if (this._eventsAbortController) {
@@ -233,7 +248,7 @@ export const ChatKit = ControlBase.extend('xpertai.chatkit.ui5.ChatKit', {
           const handler = this._handlers?.[handlerName];
 
           if (typeof handler === 'function') {
-            handler(detail as any);
+            handler(detail);
           }
 
           if (typeof this.fireEvent === 'function') {
@@ -246,33 +261,34 @@ export const ChatKit = ControlBase.extend('xpertai.chatkit.ui5.ChatKit', {
 
     this._eventsAbortController = controller;
   },
-  _callMethod(this: ChatKitInstance, method: ChatKitMethod, args: IArguments) {
-    const el = this._chatkitEl as any;
-    if (!el || typeof el[method] !== 'function') {
+  _callMethod(this: ChatKitInstance, method: ChatKitMethod, ...args: unknown[]) {
+    const el = this._chatkitEl;
+    const methodRef = el?.[method as keyof XpertAIChatKit];
+    if (!el || typeof methodRef !== 'function') {
       if (typeof console !== 'undefined' && typeof console.warn === 'function') {
         console.warn('ChatKit element is not mounted');
       }
       return;
     }
 
-    return el[method](...Array.prototype.slice.call(args));
+    return (methodRef as (...args: unknown[]) => unknown).apply(el, args);
   },
-  focusComposer(this: ChatKitInstance) {
-    return this._callMethod('focusComposer', arguments);
+  focusComposer(this: ChatKitInstance, ...args: ChatKitMethodParams<'focusComposer'>) {
+    return this._callMethod('focusComposer', ...args);
   },
-  setThreadId(this: ChatKitInstance, threadId: string) {
-    return this._callMethod('setThreadId', arguments);
+  setThreadId(this: ChatKitInstance, ...args: ChatKitMethodParams<'setThreadId'>) {
+    return this._callMethod('setThreadId', ...args);
   },
-  sendUserMessage(this: ChatKitInstance, message: unknown) {
-    return this._callMethod('sendUserMessage', arguments);
+  sendUserMessage(this: ChatKitInstance, ...args: ChatKitMethodParams<'sendUserMessage'>) {
+    return this._callMethod('sendUserMessage', ...args);
   },
-  setComposerValue(this: ChatKitInstance, value: string) {
-    return this._callMethod('setComposerValue', arguments);
+  setComposerValue(this: ChatKitInstance, ...args: ChatKitMethodParams<'setComposerValue'>) {
+    return this._callMethod('setComposerValue', ...args);
   },
-  fetchUpdates(this: ChatKitInstance) {
-    return this._callMethod('fetchUpdates', arguments);
+  fetchUpdates(this: ChatKitInstance, ...args: ChatKitMethodParams<'fetchUpdates'>) {
+    return this._callMethod('fetchUpdates', ...args);
   },
-  sendCustomAction(this: ChatKitInstance, action: unknown) {
-    return this._callMethod('sendCustomAction', arguments);
+  sendCustomAction(this: ChatKitInstance, ...args: ChatKitMethodParams<'sendCustomAction'>) {
+    return this._callMethod('sendCustomAction', ...args);
   },
 });
