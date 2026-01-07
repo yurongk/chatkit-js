@@ -14,7 +14,7 @@ export default defineConfig({
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'XpertChatkitUI5',
       fileName: 'index',
-      formats: ['es'],
+      formats: ['es', 'cjs'],
     },
     rollupOptions: {
       external: ['@xpert-ai/chatkit-types', '@xpert-ai/chatkit-web-component'],
