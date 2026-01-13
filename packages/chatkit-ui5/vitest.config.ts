@@ -4,6 +4,13 @@ import { resolve } from 'path';
 export default defineConfig({
   test: {
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: {
+        resources: 'usable',
+        runScripts: 'dangerously',
+        url: 'file:///',
+      },
+    },
   },
   resolve: {
     alias: {
