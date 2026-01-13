@@ -1,17 +1,36 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
-import { cpSync, mkdtempSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 // Loads the real UI5 core so the control is exercised against genuine UI5 runtime
 async function bootstrapUI5() {
+  const mediaStub = () => ({
+      matches: false,
+      media: '',
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    });
+  if (!('matchMedia' in window)) {
+    (window as any).matchMedia = mediaStub;
+  }
+  if (!('matchMedia' in globalThis)) {
+    (globalThis as any).matchMedia = mediaStub;
+  }
+
   const require = createRequire(import.meta.url);
   const pkgBase = dirname(require.resolve('@openui5/sap.ui.core/package.json'));
   const srcBase = join(pkgBase, 'src');
   const tmpBase = mkdtempSync(join(tmpdir(), 'ui5-'));
   const resourcesDir = join(tmpBase, 'resources');
 
+  mkdirSync(resourcesDir, { recursive: true });
   cpSync(join(srcBase, 'sap-ui-core.js'), join(resourcesDir, 'sap-ui-core.js'));
   cpSync(join(srcBase, 'ui5loader.js'), join(resourcesDir, 'ui5loader.js'));
   cpSync(join(srcBase, 'ui5loader-autoconfig.js'), join(resourcesDir, 'ui5loader-autoconfig.js'));
@@ -30,7 +49,7 @@ async function bootstrapUI5() {
 
   const bootstrapScript = document.createElement('script');
   bootstrapScript.id = 'sap-ui-bootstrap';
-  bootstrapScript.setAttribute('src', corePath);
+  bootstrapScript.setAttribute('src', pathToFileURL(corePath).toString());
   bootstrapScript.setAttribute('data-sap-ui-theme', 'sap_horizon');
   bootstrapScript.setAttribute('data-sap-ui-async', 'false');
   const originalGetElementById = document.getElementById.bind(document);
