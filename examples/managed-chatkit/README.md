@@ -14,7 +14,7 @@ Full-stack example demonstrating ChatKit integration with React frontend and Pyt
 
 ```bash
 cd examples/managed-chatkit/backend
-cp .env.example .env
+cp ../../../.env.example .env
 # Edit .env with your API keys
 uv sync
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -26,7 +26,7 @@ Backend runs on http://localhost:8000
 
 ```bash
 cd examples/managed-chatkit/frontend
-cp .env.example .env
+cp ../../../.env.example .env
 pnpm install
 pnpm dev
 ```
