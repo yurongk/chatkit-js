@@ -101,7 +101,7 @@ importers:
         version: 19.2.3(@types/react@19.2.7)
       '@vitejs/plugin-react':
         specifier: ^4.3.4
-        version: 4.7.0(vite@6.4.1(@types/node@20.19.27)(jiti@1.21.7)(lightningcss@1.30.2))
+        version: 4.7.0(vite@6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2))
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.23(postcss@8.5.6)
@@ -116,7 +116,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^6.0.0
-        version: 6.4.1(@types/node@20.19.27)(jiti@1.21.7)(lightningcss@1.30.2)
+        version: 6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)
 
   examples/managed-chatkit:
     devDependencies:
@@ -361,6 +361,31 @@ importers:
       vite:
         specifier: ^7.3.0
         version: 7.3.0(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@20.19.27)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.12.6(@types/node@20.19.27)(typescript@5.9.3))
+
+  packages/chatkit-ui5:
+    dependencies:
+      '@xpert-ai/chatkit-types':
+        specifier: workspace:*
+        version: link:../chatkit
+      '@xpert-ai/chatkit-web-component':
+        specifier: workspace:*
+        version: link:../web-component
+    devDependencies:
+      '@openui5/sap.ui.core':
+        specifier: ^1.143.1
+        version: 1.143.1
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.21(@types/node@20.19.27)(lightningcss@1.30.2)
+      vite-plugin-dts:
+        specifier: ^3.7.0
+        version: 3.9.1(@types/node@20.19.27)(rollup@4.53.5)(typescript@5.9.3)(vite@5.4.21(@types/node@20.19.27)(lightningcss@1.30.2))
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@20.19.27)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.30.2)(msw@2.12.6(@types/node@20.19.27)(typescript@5.9.3))
@@ -1427,6 +1452,9 @@ packages:
 
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
+
+  '@openui5/sap.ui.core@1.143.1':
+    resolution: {integrity: sha512-XBma+lSmD6rROJNHZPNE5QZNfWW1Hv0CASfvHYKAoj38k8dGaDi2HSpnKsmzVEJI+MWrsthZW7XxRaR6tSZD5g==}
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -5782,6 +5810,7 @@ packages:
   whatwg-encoding@3.1.1:
     resolution: {integrity: sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ==}
     engines: {node: '>=18'}
+    deprecated: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 
   whatwg-mimetype@4.0.0:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
@@ -6885,6 +6914,8 @@ snapshots:
 
   '@open-draft/until@2.1.0': {}
 
+  '@openui5/sap.ui.core@1.143.1': {}
+
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
@@ -7628,18 +7659,6 @@ snapshots:
       eslint-visitor-keys: 4.2.1
 
   '@ungap/structured-clone@1.3.0': {}
-
-  '@vitejs/plugin-react@4.7.0(vite@6.4.1(@types/node@20.19.27)(jiti@1.21.7)(lightningcss@1.30.2))':
-    dependencies:
-      '@babel/core': 7.28.5
-      '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.28.5)
-      '@babel/plugin-transform-react-jsx-source': 7.27.1(@babel/core@7.28.5)
-      '@rolldown/pluginutils': 1.0.0-beta.27
-      '@types/babel__core': 7.20.5
-      react-refresh: 0.17.0
-      vite: 6.4.1(@types/node@20.19.27)(jiti@1.21.7)(lightningcss@1.30.2)
-    transitivePeerDependencies:
-      - supports-color
 
   '@vitejs/plugin-react@4.7.0(vite@6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2))':
     dependencies:
@@ -11620,20 +11639,6 @@ snapshots:
     optionalDependencies:
       '@types/node': 20.19.27
       fsevents: 2.3.3
-      lightningcss: 1.30.2
-
-  vite@6.4.1(@types/node@20.19.27)(jiti@1.21.7)(lightningcss@1.30.2):
-    dependencies:
-      esbuild: 0.25.12
-      fdir: 6.5.0(picomatch@4.0.3)
-      picomatch: 4.0.3
-      postcss: 8.5.6
-      rollup: 4.53.5
-      tinyglobby: 0.2.15
-    optionalDependencies:
-      '@types/node': 20.19.27
-      fsevents: 2.3.3
-      jiti: 1.21.7
       lightningcss: 1.30.2
 
   vite@6.4.1(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2):
