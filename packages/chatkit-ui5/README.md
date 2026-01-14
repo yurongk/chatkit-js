@@ -14,7 +14,7 @@ pnpm add @xpert-ai/chatkit-ui5
 # or npm i @xpert-ai/chatkit-ui5
 ```
 
-Place the build output in the UI5 static resources directory and declare the resource root path in `manifest.json` (example matches sample-app):
+Place the build output *chatkit.ui5.js* in the UI5 static resources directory and declare the resource root path in `manifest.json` (example matches sample-app):
 
 ```json
 "sap.ui5": {
