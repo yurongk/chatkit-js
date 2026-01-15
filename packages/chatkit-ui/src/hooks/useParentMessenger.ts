@@ -163,6 +163,19 @@ export function useParentMessenger(
         }
 
         const params = payload.data as SendUserMessageParams
+
+        // Build trigger parameters to inject into state
+        let triggerParams: Record<string, any> = {}
+        if (params.trigger) {
+          if (typeof params.trigger === 'object' && 'name' in params.trigger && 'params' in params.trigger) {
+            // Structured trigger: { name, params }
+            triggerParams = params.trigger.params || {}
+          } else {
+            // Direct trigger parameters object
+            triggerParams = params.trigger as Record<string, any>
+          }
+        }
+
         streamRef.current?.submit({
           input: {
             input: params.text,
@@ -171,7 +184,9 @@ export function useParentMessenger(
             ...(params.state || {}),
             [STATE_VARIABLE_HUMAN]: {
               input: params.text,
-            }
+            },
+            // Inject trigger parameters directly into state as workflow state variables
+            ...triggerParams
           }
         }, {
           newThread: params.newThread,
