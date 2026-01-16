@@ -1,0 +1,46 @@
+{
+  "name": "@xpert-ai/chatkit-js",
+  "version": "0.0.1",
+  "description": "Framework-agnostic bindings for Xpert Chatkit",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xpert-ai/chatkit-types": "workspace:*",
+    "@xpert-ai/chatkit-web-component": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0",
+    "vite-plugin-dts": "^3.7.0"
+  },
+  "keywords": [
+    "chatkit",
+    "javascript",
+    "xpert"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": false
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xpert-ai/chatkit-js"
+  }
+}
