@@ -1,28 +1,22 @@
-# @xpert-ai/chatkit-js
+# Framework-Agnostic Integration (Vanilla JS)
 
-Framework-agnostic ChatKit integration helpers for vanilla JS + Web Components.
+This guide shows how to embed ChatKit without a framework by using the `xpertai-chatkit` Web Component and the `@xpert-ai/chatkit-js` helper.
 
-## Minimal Example
-Framework-agnostic bindings for the Xpert Chatkit Web Component.
-
-## Install
+## 1) Install
 
 ```bash
-pnpm add @xpert-ai/chatkit-js
+npm install @xpert-ai/chatkit-js
 ```
 
-## Usage
+## 2) Create + mount the element
 
 ```ts
 import { createChatKit } from '@xpert-ai/chatkit-js';
 
 const container = document.getElementById('chatkit-root');
-
-// 1) Create + mount the custom element
 const element = document.createElement('xpertai-chatkit');
 container?.appendChild(element);
 
-// 2) Provide options + event callbacks
 const chatkit = createChatKit(element, {
   options: {
     api: {
@@ -41,21 +35,17 @@ const chatkit = createChatKit(element, {
     console.log('Assistant finished responding');
   },
 });
+```
 
-// 3) Clean up on page unload
+## 3) Clean up on page unload
+
+```ts
 window.addEventListener('beforeunload', () => {
   chatkit.destroy();
 });
 ```
-const chatkit = createChatKit({
-  apiBase: 'https://your-xpertai-api-host',
-  apiKey: 'your-xpertai-api-key',
-  onReady: () => {
-    console.log('chatkit ready');
-  },
-});
 
-document.body.appendChild(chatkit.element);
-```
+## Notes
 
-Call `chatkit.destroy()` when you no longer need the instance to remove event listeners.
+- `xpertai-chatkit` is the custom element name. Make sure it is present in the DOM before calling `createChatKit`.
+- Always provide a full `options` object when you update configuration.

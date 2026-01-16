@@ -85,6 +85,16 @@ chatkit-js/
 └── docs/                    # Documentation
 ```
 
+## 📦 Packages
+
+- [@xpert-ai/chatkit](./packages/chatkit/)
+- [@xpert-ai/chatkit-react](./packages/chatkit-react/)
+- [@xpert-ai/chatkit-vue](./packages/chatkit-vue/)
+- [@xpert-ai/chatkit-ui](./packages/chatkit-ui/)
+- [@xpert-ai/chatkit-ui5](./packages/chatkit-ui5/)
+- [@xpert-ai/chatkit-web-component](./packages/web-component/)
+- [@xpert-ai/chatkit-js](./packages/chatkit-js/README.md)
+
 ## 🛠️ Development
 
 ```bash
