@@ -75,8 +75,10 @@ export function MyChat() {
 chatkit-js/
 ├── packages/
 │   ├── chatkit/              # Core type definitions
+│   ├── chatkit-js/           # Vanilla JS factory helpers
 │   ├── chatkit-react/        # React bindings
 │   ├── chatkit-ui/           # Complete UI library
+│   ├── chatkit-vue/          # Vue bindings
 │   └── web-component/        # Web Component (framework-agnostic)
 ├── examples/
 │   └── managed-chatkit/      # Full-stack example
