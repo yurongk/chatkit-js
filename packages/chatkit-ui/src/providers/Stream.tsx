@@ -52,9 +52,7 @@ export type StreamContextType = {
   isLoading: boolean;
   isReady: boolean;
   error: unknown;
-  loadThreadMessages: (
-    threadId: string,
-  ) => Promise<ChatKitAIMessage[]>;
+  loadThreadMessages: (recordId: string) => Promise<ChatKitAIMessage[]>;
   submit: (
     values?: TChatRequest | null,
     options?: StreamSubmitOptions,
@@ -605,7 +603,7 @@ const StreamSession = ({
   }, []);
 
   const loadThreadMessages = useCallback(
-    async (threadId: string) => {
+    async (recordId: string) => {
       if (!apiUrl || !apiKey) {
         throw new Error('Missing API configuration');
       }
@@ -614,7 +612,7 @@ const StreamSession = ({
       } catch {
         // ignore stop errors from an already-idle stream
       }
-      const response = await client.conversations.listMessages(threadId, {
+      const response = await client.conversations.listMessages(recordId, {
         limit: DEFAULT_HISTORY_LIMIT,
         offset: 0,
       });

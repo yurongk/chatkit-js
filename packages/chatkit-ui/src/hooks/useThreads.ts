@@ -1,50 +1,42 @@
 import * as React from 'react';
 
-import type { ChatConversation } from '@xpert-ai/xpert-sdk';
+import type { ChatConversation as ThreadRecord } from '@xpert-ai/xpert-sdk';
 
-import type { Conversation } from '../components/history/HistorySidebar';
+import type { ThreadItem } from '../components/history/HistorySidebar';
 import { useStreamContext } from '../providers/Stream';
 import { i18n, initI18n } from '../i18n';
 
-type CreateConversationInput = {
-  conversationId?: string;
+type CreateThreadInput = {
+  recordId?: string;
   threadId?: string;
   title?: string;
   options?: Record<string, unknown>;
 };
 
 type UseThreadsResult = {
-  conversations: Conversation[];
-  rawConversations: ChatConversation[];
+  threads: ThreadItem[];
+  rawThreads: ThreadRecord[];
   isLoading: boolean;
   error: unknown;
-  refreshConversations: () => Promise<void>;
-  createConversation: (input?: CreateConversationInput) => Promise<ChatConversation>;
-  updateConversation: (
-    conversationId: string,
-    payload: Partial<ChatConversation>,
-  ) => Promise<ChatConversation>;
-  deleteConversation: (conversationId: string) => Promise<void>;
-  // Legacy aliases kept for compatibility
   refreshThreads: () => Promise<void>;
-  createThread: (input?: CreateConversationInput) => Promise<ChatConversation>;
-  updateThreadMetadata: (
-    conversationId: string,
-    payload: Partial<ChatConversation>,
-  ) => Promise<ChatConversation>;
-  deleteThread: (conversationId: string) => Promise<void>;
+  createThread: (input?: CreateThreadInput) => Promise<ThreadRecord>;
+  updateThread: (
+    recordId: string,
+    payload: Partial<ThreadRecord>,
+  ) => Promise<ThreadRecord>;
+  deleteThread: (recordId: string) => Promise<void>;
 };
 
 const DEFAULT_LIMIT = 50;
 
-const getConversationTitle = (conversation: ChatConversation): string => {
-  const title = conversation.title?.trim();
+const getThreadTitle = (threadRecord: ThreadRecord): string => {
+  const title = threadRecord.title?.trim();
   if (title) return title;
   initI18n();
-  const suffix = (conversation.id ?? conversation.threadId ?? '').slice(0, 8);
+  const suffix = (threadRecord.threadId ?? threadRecord.id ?? '').slice(0, 8);
   return suffix
-    ? i18n.t('history.conversationWithId', { id: suffix })
-    : i18n.t('history.conversationFallback');
+    ? i18n.t('history.threadWithId', { id: suffix })
+    : i18n.t('history.threadFallback');
 };
 
 const toDate = (value: string | undefined): Date | undefined => {
@@ -54,15 +46,15 @@ const toDate = (value: string | undefined): Date | undefined => {
   return new Date(timestamp);
 };
 
-const toConversation = (conversation: ChatConversation): Conversation => ({
-  id: conversation.id,
-  threadId: conversation.threadId ?? null,
-  title: getConversationTitle(conversation),
-  lastMessageAt: toDate(conversation.updatedAt),
+const toThreadItem = (threadRecord: ThreadRecord): ThreadItem => ({
+  id: threadRecord.threadId ?? threadRecord.id,
+  recordId: threadRecord.id,
+  title: getThreadTitle(threadRecord),
+  lastMessageAt: toDate(threadRecord.updatedAt),
 });
 
-const sortConversations = (conversations: ChatConversation[]): ChatConversation[] => {
-  return [...conversations].sort((a, b) => {
+const sortThreadRecords = (threadRecords: ThreadRecord[]): ThreadRecord[] => {
+  return [...threadRecords].sort((a, b) => {
     const aTime = Date.parse(a.updatedAt ?? '');
     const bTime = Date.parse(b.updatedAt ?? '');
     return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
@@ -71,18 +63,18 @@ const sortConversations = (conversations: ChatConversation[]): ChatConversation[
 
 export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
   const { client, threadId, assistantId, isReady } = useStreamContext();
-  const [conversationsState, setConversationsState] = React.useState<ChatConversation[]>([]);
+  const [threadRecords, setThreadRecords] = React.useState<ThreadRecord[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<unknown>(null);
 
-  const upsertConversation = React.useCallback((conversation: ChatConversation) => {
-    setConversationsState((prev) => {
-      const next = prev.filter((item) => item.id !== conversation.id);
-      return sortConversations([conversation, ...next]);
+  const upsertThreadRecord = React.useCallback((threadRecord: ThreadRecord) => {
+    setThreadRecords((prev) => {
+      const next = prev.filter((item) => item.id !== threadRecord.id);
+      return sortThreadRecords([threadRecord, ...next]);
     });
   }, []);
 
-  const refreshConversations = React.useCallback(async () => {
+  const refreshThreads = React.useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -91,7 +83,7 @@ export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
         limit,
         order: { updatedAt: 'DESC' },
       });
-      setConversationsState(items ?? []);
+      setThreadRecords(items ?? []);
     } catch (err) {
       setError(err);
     } finally {
@@ -99,80 +91,75 @@ export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
     }
   }, [client, limit, assistantId]);
 
-  const createConversation = React.useCallback(
-    async (input?: CreateConversationInput) => {
+  const createThread = React.useCallback(
+    async (input?: CreateThreadInput) => {
       setError(null);
-      const payload: Partial<ChatConversation> = {};
-      if (input?.conversationId) payload.id = input.conversationId;
+      const payload: Partial<ThreadRecord> = {};
+      if (input?.recordId) payload.id = input.recordId;
       if (input?.threadId) payload.threadId = input.threadId;
       if (input?.title) payload.title = input.title;
       if (input?.options) payload.options = input.options;
 
       const created = await client.conversations.create(payload);
-      upsertConversation(created);
+      upsertThreadRecord(created);
       return created;
     },
-    [client, upsertConversation],
+    [client, upsertThreadRecord],
   );
 
-  const updateConversation = React.useCallback(
-    async (id: string, payload: Partial<ChatConversation>) => {
+  const updateThread = React.useCallback(
+    async (recordId: string, payload: Partial<ThreadRecord>) => {
       setError(null);
-      const updated = await client.conversations.update(id, payload);
-      upsertConversation(updated);
+      const updated = await client.conversations.update(recordId, payload);
+      upsertThreadRecord(updated);
       return updated;
     },
-    [client, upsertConversation],
+    [client, upsertThreadRecord],
   );
 
-  const deleteConversation = React.useCallback(
-    async (id: string) => {
+  const deleteThread = React.useCallback(
+    async (recordId: string) => {
       setError(null);
-      await client.conversations.delete(id);
-      setConversationsState((prev) => prev.filter((item) => item.id !== id));
+      await client.conversations.delete(recordId);
+      setThreadRecords((prev) => prev.filter((item) => item.id !== recordId));
     },
     [client],
   );
 
   React.useEffect(() => {
-    // Only fetch conversations when the client is authenticated
+    // Only fetch threads when the client is authenticated
     if (!isReady) return;
-    void refreshConversations();
-  }, [refreshConversations, isReady]);
+    void refreshThreads();
+  }, [refreshThreads, isReady]);
 
   React.useEffect(() => {
     if (!isReady) return;
     if (!threadId) return;
-    if (conversationsState.some((item) => item.threadId === threadId)) return;
+    if (threadRecords.some((item) => item.threadId === threadId)) return;
     void client.conversations
       .search({ where: { threadId }, limit: 1 })
       .then((result) => {
         const found = result.items?.[0];
-        if (found) upsertConversation(found);
+        if (found) upsertThreadRecord(found);
       })
       .catch((err) => {
         setError(err);
       });
-  }, [client, threadId, conversationsState, upsertConversation, isReady]);
+  }, [client, threadId, threadRecords, upsertThreadRecord, isReady]);
 
-  const conversations = React.useMemo(
-    () => conversationsState.map((conversation) => toConversation(conversation)),
-    [conversationsState],
+  const threads = React.useMemo(
+    () => threadRecords.map((threadRecord) => toThreadItem(threadRecord)),
+    [threadRecords],
   );
 
   return {
-    conversations,
-    rawConversations: conversationsState,
+    threads,
+    rawThreads: threadRecords,
     isLoading,
     error,
-    refreshConversations,
-    createConversation,
-    updateConversation,
-    deleteConversation,
-    // Legacy aliases
-    refreshThreads: refreshConversations,
-    createThread: createConversation,
-    updateThreadMetadata: updateConversation,
-    deleteThread: deleteConversation,
+    refreshThreads,
+    createThread,
+    updateThread,
+    deleteThread,
   };
 }

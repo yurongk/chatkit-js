@@ -12,42 +12,42 @@ import {
   SheetTrigger,
 } from '../ui/sheet';
 
-export type Conversation = {
+export type ThreadItem = {
   id: string;
+  recordId: string;
   title: string;
   lastMessageAt?: Date;
-  threadId?: string | null;
 };
 
 export type HistorySidebarProps = {
-  conversations?: Conversation[];
-  currentConversationId?: string;
-  onNewConversation?: () => void;
-  onSelectConversation?: (id: string) => void;
-  onDeleteConversation?: (id: string) => void;
+  threads?: ThreadItem[];
+  currentThreadId?: string;
+  onNewThread?: () => void;
+  onSelectThread?: (id: string) => void;
+  onDeleteThread?: (id: string) => void;
   showDelete?: boolean;
   disabled?: boolean;
 };
 
 export function HistorySidebar({
-  conversations = [],
-  currentConversationId,
-  onNewConversation,
-  onSelectConversation,
-  onDeleteConversation,
+  threads = [],
+  currentThreadId,
+  onNewThread,
+  onSelectThread,
+  onDeleteThread,
   showDelete = true,
   disabled = false,
 }: HistorySidebarProps) {
   const { t } = useChatkitTranslation();
   const [open, setOpen] = React.useState(false);
 
-  const handleNewConversation = () => {
-    onNewConversation?.();
+  const handleNewThread = () => {
+    onNewThread?.();
     setOpen(false);
   };
 
-  const handleSelectConversation = (id: string) => {
-    onSelectConversation?.(id);
+  const handleSelectThread = (id: string) => {
+    onSelectThread?.(id);
     setOpen(false);
   };
 
@@ -61,7 +61,7 @@ export function HistorySidebar({
           className="h-8 w-8 cursor-pointer"
         >
           <History size={18} />
-          <span className="sr-only">{t('history.conversationHistory')}</span>
+          <span className="sr-only">{t('history.threadHistory')}</span>
         </Button>
       </SheetTrigger>
       <SheetContent side="right" className="w-80 p-0">
@@ -71,43 +71,43 @@ export function HistorySidebar({
 
         <div className="p-4">
           <Button
-            onClick={handleNewConversation}
+            onClick={handleNewThread}
             className="w-full justify-start gap-2"
             variant="secondary"
           >
             <PlusCircle size={16} />
-            {t('history.newChat')}
+            {t('history.newThread')}
           </Button>
         </div>
 
         <ScrollArea className="h-[calc(100vh-140px)]">
           <div className="px-4 pb-4">
-            {conversations.length === 0 ? (
+            {threads.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 {t('history.empty')}
               </div>
             ) : (
               <div className="space-y-1">
-                {conversations.map((conversation) => (
+                {threads.map((thread) => (
                   <div
-                    key={conversation.id}
+                    key={thread.id}
                     className={cn(
                       'group flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
                       'hover:bg-muted cursor-pointer',
-                      currentConversationId === conversation.id && 'bg-muted'
+                      currentThreadId === thread.id && 'bg-muted'
                     )}
-                    onClick={() => handleSelectConversation(conversation.id)}
+                    onClick={() => handleSelectThread(thread.id)}
                   >
                     <span className="text-muted-foreground">
                       <MessageSquare size={16} />
                     </span>
-                    <span className="flex-1 truncate">{conversation.title}</span>
-                    {showDelete && onDeleteConversation && (
+                    <span className="flex-1 truncate">{thread.title}</span>
+                    {showDelete && onDeleteThread && (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDeleteConversation(conversation.id);
+                          onDeleteThread(thread.id);
                         }}
                         className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all"
                       >

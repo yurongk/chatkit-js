@@ -10,11 +10,6 @@ export type SendUserMessageParams = {
   reply?: string;
   attachments?: Attachment[];
   newThread?: boolean;
-  /** Trigger parameters from workflow trigger configuration */
-  trigger?: {
-    name?: string;
-    params?: Record<string, any>;
-  } | Record<string, any>;
 }
 
 /**

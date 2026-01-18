@@ -109,7 +109,6 @@ export function Chat({
   const {setStream} = useStreamManager();
   const stream = useStreamContext();
 
-  // const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
   const [historyError, setHistoryError] = React.useState<string | null>(null);
   const [assistantName, setAssistantName] = React.useState<string | null>(null);
@@ -157,10 +156,10 @@ export function Chat({
   const [selectedTool, setSelectedTool] = React.useState<ToolOption | null>(null);
   const [attachments, setAttachments] = React.useState<UploadingFile[]>([]);
   const {
-    conversations,
-    createConversation,
-    deleteConversation,
-    refreshConversations,
+    threads,
+    createThread,
+    deleteThread,
+    refreshThreads,
     isLoading: isThreadsLoading,
   } = useThreads();
   const scrollAreaRef = React.useRef<HTMLDivElement>(null);
@@ -212,8 +211,8 @@ export function Chat({
 
   React.useEffect(() => {
     if (missingConfig) return;
-    void refreshConversations();
-  }, [missingConfig, refreshConversations]);
+    void refreshThreads();
+  }, [missingConfig, refreshThreads]);
 
   // Fetch assistant name from API
   React.useEffect(() => {
@@ -418,8 +417,8 @@ export function Chat({
     scrollToBottom(true);
   };
 
-  const loadConversationMessages = React.useCallback(
-    async (threadId: string) => {
+  const loadThreadMessages = React.useCallback(
+    async (recordId: string) => {
       if (missingConfig) {
         setHistoryError(t('chat.missingConfigShort'));
         return;
@@ -427,10 +426,10 @@ export function Chat({
       setHistoryError(null);
       setIsHistoryLoading(true);
       try {
-        await stream.loadThreadMessages(threadId);
-        // setActiveConversationId(threadId ?? null);
+        await stream.loadThreadMessages(recordId);
+        // setActiveThreadId(threadId ?? null);
       } catch (err) {
-        console.warn('Failed to load conversation messages', err);
+        console.warn('Failed to load thread messages', err);
         setHistoryError(
           err instanceof Error ? err.message : t('chat.errors.loadMessages'),
         );
@@ -441,63 +440,49 @@ export function Chat({
     [missingConfig, stream, t],
   );
 
-  // React.useEffect(() => {
-  //   if (!stream.threadId) return;
-  //   if (isHistoryLoading) return;
-  //   const matched = conversations.find((item) => item.threadId === stream.threadId);
-  //   if (!matched) return;
-  //   if (activeConversationId && activeConversationId === matched.id) return;
-  //   if (messages.length > 0) {
-  //     setActiveConversationId(matched.id);
-  //     return;
-  //   }
-  //   // void loadConversationMessages(matched.id, matched.threadId ?? null);
-  // }, [
-  //   conversations,
-  //   stream.threadId,
-  //   messages.length,
-  //   activeConversationId,
-  //   isHistoryLoading,
-  // ]);
-
-  const handleNewConversation = async () => {
+  const handleNewThread = async () => {
     if (missingConfig || stream.isLoading || isHistoryLoading) return;
     setHistoryError(null);
     try {
-      const created = await createConversation({ title: t('history.newConversationTitle') });
-      // setActiveConversationId(created.id);
-      stream.reset(created.id ?? null, []);
-      await refreshConversations();
+      // const created = await createThread({ title: t('history.newThreadTitle') });
+      // setActiveThreadId(created.id);
+      stream.reset(null, []);
+      // await refreshThreads();
     } catch (err) {
-      console.warn('Failed to create conversation', err);
+      console.warn('Failed to create thread', err);
       setHistoryError(
-        err instanceof Error ? err.message : t('chat.errors.createConversation'),
+        err instanceof Error ? err.message : t('chat.errors.createThread'),
       );
     }
   };
 
-  const handleSelectConversation = (id: string) => {
+  const handleSelectThread = (id: string) => {
     if (isHistoryLoading) return;
     setHistoryError(null);
-    // const conversation = conversations.find((item) => item.id === id);
+    const thread = threads.find((item) => item.id === id);
+    if (!thread) return;
     if (id === stream.threadId) return;
     stream.reset(id, []);
-    void loadConversationMessages(id);
+    if (thread.recordId) {
+      void loadThreadMessages(thread.recordId);
+    }
   };
 
-  const handleDeleteConversation = (id: string) => {
+  const handleDeleteThread = (id: string) => {
     setHistoryError(null);
-    void deleteConversation(id)
+    const thread = threads.find((item) => item.id === id);
+    if (!thread?.recordId) return;
+    void deleteThread(thread.recordId)
       .then(() => {
         if (stream.threadId === id) {
           stream.reset(null, []);
         }
-        return refreshConversations();
+        return refreshThreads();
       })
       .catch((err) => {
-        console.warn('Failed to delete conversation', err);
+        console.warn('Failed to delete thread', err);
         setHistoryError(
-          err instanceof Error ? err.message : t('chat.errors.deleteConversation'),
+          err instanceof Error ? err.message : t('chat.errors.deleteThread'),
         );
       });
   };
@@ -554,10 +539,10 @@ export function Chat({
         {/* History controls - only shown when history.enabled is true (default) */}
         {(history?.enabled !== false) && (
           <div className="flex items-center gap-1">
-            {/* New conversation button */}
+            {/* New thread button */}
             <button
               type="button"
-              onClick={handleNewConversation}
+              onClick={handleNewThread}
               disabled={missingConfig || stream.isLoading || isHistoryLoading}
               className={cn(
                 'flex h-8 w-8 cursor-pointer items-center justify-center rounded-md',
@@ -565,16 +550,16 @@ export function Chat({
                 'transition-colors duration-150',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
-              title={t('history.newConversation')}
+              title={t('history.newThread')}
             >
               <Pencil size={16} />
             </button>
             <HistorySidebar
-              conversations={conversations}
-              currentConversationId={stream.threadId ?? undefined}
-              onNewConversation={handleNewConversation}
-              onSelectConversation={handleSelectConversation}
-              onDeleteConversation={handleDeleteConversation}
+              threads={threads}
+              currentThreadId={stream.threadId ?? undefined}
+              onNewThread={handleNewThread}
+              onSelectThread={handleSelectThread}
+              onDeleteThread={handleDeleteThread}
               showDelete={history?.showDelete !== false}
               disabled={missingConfig || stream.isLoading || isThreadsLoading || isHistoryLoading}
             />
@@ -601,7 +586,7 @@ export function Chat({
           )}
           {isHistoryLoading && (
             <div className="mb-4 rounded-lg border border-muted px-3 py-2 text-sm text-muted-foreground">
-              {t('chat.loadingConversation')}
+              {t('chat.loadingThread')}
             </div>
           )}
           {messages.length === 0 ? (
