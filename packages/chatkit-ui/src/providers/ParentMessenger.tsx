@@ -152,18 +152,6 @@ export function ParentMessengerProvider({
 
         const params = payload.data as SendUserMessageParams
 
-        // Build trigger parameters to inject into state
-        let triggerParams: Record<string, any> = {}
-        if (params.trigger) {
-          if (typeof params.trigger === 'object' && 'name' in params.trigger && 'params' in params.trigger) {
-            // Structured trigger: { name, params }
-            triggerParams = params.trigger.params || {}
-          } else {
-            // Direct trigger parameters object
-            triggerParams = params.trigger as Record<string, any>
-          }
-        }
-
         streamRef.current?.submit({
           input: {
             input: params.text,
@@ -171,10 +159,9 @@ export function ParentMessengerProvider({
           state: {
             ...(params.state || {}),
             [STATE_VARIABLE_HUMAN]: {
-              input: params.text,
+              ...(params.state?.[STATE_VARIABLE_HUMAN] || {}),
+              input: params.text ?? params.state?.[STATE_VARIABLE_HUMAN]?.input,
             },
-            // Inject trigger parameters directly into state as workflow state variables
-            ...triggerParams
           }
         }, {
           newThread: params.newThread,
@@ -207,7 +194,20 @@ export function ParentMessengerProvider({
         const nextThreadId = data?.threadId ?? null;
         streamRef.current?.reset(nextThreadId, undefined, { suppressThreadChange: true });
         if (nextThreadId) {
-          streamRef.current?.loadThreadMessages(nextThreadId);
+          const stream = streamRef.current;
+          if (!stream) return;
+          void stream.client.conversations
+            .search({ where: { threadId: nextThreadId }, limit: 1 })
+            .then((result) => {
+              const recordId = result.items?.[0]?.id;
+              if (recordId) {
+                void stream.loadThreadMessages(recordId);
+              }
+            })
+            .catch((err) => {
+              // eslint-disable-next-line no-console
+              console.warn('Failed to load thread messages', err);
+            });
         }
         return;
       }

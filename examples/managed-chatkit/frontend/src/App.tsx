@@ -209,63 +209,23 @@ export default function App() {
             </pre>
           </div>
 
-          <div className="space-y-2">
-            {/* 原始按钮 - 不带触发器参数 */}
+          <div className="space-x-2">
             <button className="mt-2 px-3 py-1 bg-red-500 text-white rounded"
               onClick={() => chatkit.sendUserMessage({ text: t('messages.helloWorld'), newThread: true })}
             >
               {t('buttons.triggerConversation')}
             </button>
 
-            {/* 新增: 带触发器参数的按钮 */}
             <button className="mt-2 px-3 py-1 bg-blue-500 text-white rounded"
               onClick={() => chatkit.sendUserMessage({
-                text: 'Test with trigger parameters',
+                text: 'Test with parameters',
                 newThread: true,
-                trigger: {
-                  project_id: 'proj-123',
-                  environment: 'production',
-                  priority: 5,
-                  timestamp: new Date().toISOString()
-                }
-              })}
-            >
-              📤 Send with Trigger Params
-            </button>
-
-            {/* 新增: 带结构化触发器的按钮 */}
-            <button className="mt-2 px-3 py-1 bg-green-500 text-white rounded"
-              onClick={() => chatkit.sendUserMessage({
-                text: 'Test with structured trigger',
-                newThread: true,
-                trigger: {
-                  name: 'scheduled_trigger',
-                  params: {
-                    schedule_id: 'sched-456',
-                    task_type: 'batch_processing',
-                    priority: 'high'
-                  }
-                }
-              })}
-            >
-              📋 Send with Structured Trigger
-            </button>
-
-            {/* 新增: 带自定义状态和触发器的按钮 */}
-            <button className="mt-2 px-3 py-1 bg-purple-500 text-white rounded"
-              onClick={() => chatkit.sendUserMessage({
-                text: 'Test with state and trigger',
                 state: {
-                  custom_context: 'my_value',
-                  session_id: 'sess-789'
-                },
-                trigger: {
-                  source: 'webhook',
-                  event_type: 'order_created'
+                  the_name: 'Alice',
                 }
               })}
             >
-              🎯 Send with State + Trigger
+              📤 Send with Params
             </button>
           </div>
         </div>
