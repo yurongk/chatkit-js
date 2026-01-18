@@ -53,7 +53,7 @@ export type StreamContextType = {
   isReady: boolean;
   error: unknown;
   loadThread: (threadId: string) => Promise<void>;
-  loadThreadMessages: (recordId: string) => Promise<ChatKitAIMessage[]>;
+  loadConversationMessages: (recordId: string) => Promise<ChatKitAIMessage[]>;
   submit: (
     values?: TChatRequest | null,
     options?: StreamSubmitOptions,
@@ -599,12 +599,19 @@ const StreamSession = ({
   );
 
   const stop = useCallback(() => {
+    const activeThreadId = threadId ?? null;
+    const activeRunId = lastExecutionIdRef.current;
     abortRef.current?.abort();
     abortRef.current = null;
     setIsLoading(false);
-  }, []);
+    if (activeThreadId && activeRunId) {
+      client.runs
+        .cancel(activeThreadId, activeRunId, false)
+        .catch(() => undefined);
+    }
+  }, [client, threadId]);
 
-  const loadThreadMessages = useCallback(
+  const loadConversationMessages = useCallback(
     async (recordId: string) => {
       if (!apiUrl || !apiKey) {
         throw new Error('Missing API configuration');
@@ -692,8 +699,8 @@ const StreamSession = ({
   );
 
   const loadThread = useCallback(
-    async (nextThreadId: string) => {
-      if (!nextThreadId) return;
+    async (threadId: string) => {
+      if (!threadId) return;
       setError(null);
 
       try {
@@ -702,10 +709,10 @@ const StreamSession = ({
         // ignore stop errors from an already-idle stream
       }
 
-      setThreadId(nextThreadId);
+      setThreadId(threadId);
 
       const conversationResult = await client.conversations.search({
-        where: { threadId: nextThreadId },
+        where: { threadId: threadId },
         limit: 1,
       });
 
@@ -715,22 +722,24 @@ const StreamSession = ({
         return;
       }
 
-      await loadThreadMessages(conversation.id);
+      await loadConversationMessages(conversation.id);
 
+      console.log('Conversation:', conversation);
       const status = String(conversation.status ?? '').toLowerCase();
-      const shouldJoinStream = status === 'running' || status === 'busy';
+      const shouldJoinStream = !status || status === 'running' || status === 'busy';
       if (!shouldJoinStream) return;
 
       const lastAiMessageResult = await client.conversations.searchMessages(
         conversation.id,
         {
-          where: { role: 'assistant' },
+          where: { role: 'ai' },
           order: { createdAt: 'DESC' },
           limit: 1,
         },
       );
       const runId = lastAiMessageResult.items?.[0]?.executionId ?? null;
       if (!runId) return;
+      lastExecutionIdRef.current = runId;
 
       const abortController = new AbortController();
       abortRef.current?.abort();
@@ -738,7 +747,7 @@ const StreamSession = ({
       setIsLoading(true);
 
       try {
-        const stream = client.runs.joinStream(nextThreadId, runId, {
+        const stream = client.runs.joinStream(threadId, runId, {
           streamMode: lastStreamOptionsRef.current.streamMode,
           signal: abortController.signal,
         });
@@ -773,7 +782,7 @@ const StreamSession = ({
         setIsLoading(false);
       }
     },
-    [client, handleInterrupt, loadThreadMessages, sendEvent, setThreadId, stop],
+    [client, handleInterrupt, loadConversationMessages, sendEvent, setThreadId, stop],
   );
 
   const submit = useCallback(
@@ -838,6 +847,7 @@ const StreamSession = ({
           streamSubgraphs: options?.streamSubgraphs,
           streamResumable: options?.streamResumable,
           signal: abortController.signal,
+          onDisconnect: 'continue'
         });
 
         for await (const chunk of stream) {
@@ -884,7 +894,7 @@ const StreamSession = ({
     isReady,
     error,
     loadThread,
-    loadThreadMessages,
+    loadConversationMessages,
     submit,
     stop,
     reset,

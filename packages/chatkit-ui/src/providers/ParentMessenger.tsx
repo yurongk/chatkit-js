@@ -192,20 +192,10 @@ export function ParentMessengerProvider({
           | null
           | undefined;
         const nextThreadId = data?.threadId ?? null;
-        streamRef.current?.reset(nextThreadId, undefined, { suppressThreadChange: true });
-        if (nextThreadId) {
-          const stream = streamRef.current;
-          if (!stream) return;
-          void stream.client.conversations
-            .search({ where: { threadId: nextThreadId }, limit: 1 })
-            .then((result) => {
-              const recordId = result.items?.[0]?.id;
-              if (recordId) {
-                void stream.loadThreadMessages(recordId);
-              }
-            })
-            .catch((err) => {
-              // eslint-disable-next-line no-console
+        const stream = streamRef.current;
+        stream?.reset(nextThreadId, undefined, { suppressThreadChange: true });
+        if (stream && nextThreadId) {
+          stream.loadThread(nextThreadId).catch((err) => {
               console.warn('Failed to load thread messages', err);
             });
         }

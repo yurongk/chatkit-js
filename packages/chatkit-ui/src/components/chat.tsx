@@ -417,7 +417,7 @@ export function Chat({
     scrollToBottom(true);
   };
 
-  const loadThreadMessages = React.useCallback(
+  const loadConversationMessages = React.useCallback(
     async (recordId: string) => {
       if (missingConfig) {
         setHistoryError(t('chat.missingConfigShort'));
@@ -426,7 +426,7 @@ export function Chat({
       setHistoryError(null);
       setIsHistoryLoading(true);
       try {
-        await stream.loadThreadMessages(recordId);
+        await stream.loadConversationMessages(recordId);
         // setActiveThreadId(threadId ?? null);
       } catch (err) {
         console.warn('Failed to load thread messages', err);
@@ -441,7 +441,7 @@ export function Chat({
   );
 
   const handleNewThread = async () => {
-    if (missingConfig || stream.isLoading || isHistoryLoading) return;
+    if (missingConfig || isHistoryLoading) return;
     setHistoryError(null);
     try {
       // const created = await createThread({ title: t('history.newThreadTitle') });
@@ -464,7 +464,7 @@ export function Chat({
     if (id === stream.threadId) return;
     stream.reset(id, []);
     if (thread.recordId) {
-      void loadThreadMessages(thread.recordId);
+      void loadConversationMessages(thread.recordId);
     }
   };
 
