@@ -17,8 +17,9 @@ export {
 } from './components/ui/card';
 export { Separator } from './components/ui/separator';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+export { ParentMessengerProvider } from './providers/ParentMessenger';
 export { useParentMessenger } from './hooks/useParentMessenger';
-export type { ParentMessenger } from './hooks/useParentMessenger';
+export type { ParentMessenger, ParentMessengerProviderProps } from './providers/ParentMessenger';
 export {
   getLanguage as getChatkitLanguage,
   setLanguage as setChatkitLanguage,
