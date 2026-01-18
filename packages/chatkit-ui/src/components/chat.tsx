@@ -220,8 +220,8 @@ export function Chat({
     stream.client.assistants
       .get(stream.assistantId)
       .then((assistant) => {
-        if (assistant?.name) {
-          setAssistantName(assistant.name);
+        if (assistant) {
+          setAssistantName(assistant.metadata?.title as string || assistant.name);
         }
       })
       .catch((err) => {
@@ -543,7 +543,7 @@ export function Chat({
             <button
               type="button"
               onClick={handleNewThread}
-              disabled={missingConfig || stream.isLoading || isHistoryLoading}
+              disabled={missingConfig || isHistoryLoading}
               className={cn(
                 'flex h-8 w-8 cursor-pointer items-center justify-center rounded-md',
                 'text-muted-foreground hover:text-foreground hover:bg-muted',
@@ -561,7 +561,7 @@ export function Chat({
               onSelectThread={handleSelectThread}
               onDeleteThread={handleDeleteThread}
               showDelete={history?.showDelete !== false}
-              disabled={missingConfig || stream.isLoading || isThreadsLoading || isHistoryLoading}
+              disabled={missingConfig || isThreadsLoading || isHistoryLoading}
             />
           </div>
         )}

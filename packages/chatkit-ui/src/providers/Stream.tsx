@@ -52,6 +52,7 @@ export type StreamContextType = {
   isLoading: boolean;
   isReady: boolean;
   error: unknown;
+  loadThread: (threadId: string) => Promise<void>;
   loadThreadMessages: (recordId: string) => Promise<ChatKitAIMessage[]>;
   submit: (
     values?: TChatRequest | null,
@@ -113,6 +114,7 @@ function normalizeRoleToMessageType(role?: string): Message['type'] {
   if (normalized === 'tool') return 'tool';
   return 'ai';
 }
+
 
 function mapChatMessageToUiMessage(message: ChatMessage): ChatKitAIMessage {
   return {
@@ -689,6 +691,91 @@ const StreamSession = ({
     [isParentAvailable, sendCommand, setError],
   );
 
+  const loadThread = useCallback(
+    async (nextThreadId: string) => {
+      if (!nextThreadId) return;
+      setError(null);
+
+      try {
+        stop();
+      } catch {
+        // ignore stop errors from an already-idle stream
+      }
+
+      setThreadId(nextThreadId);
+
+      const conversationResult = await client.conversations.search({
+        where: { threadId: nextThreadId },
+        limit: 1,
+      });
+
+      const conversation = conversationResult.items?.[0];
+      if (!conversation?.id) {
+        setValues({ messages: [] });
+        return;
+      }
+
+      await loadThreadMessages(conversation.id);
+
+      const status = String(conversation.status ?? '').toLowerCase();
+      const shouldJoinStream = status === 'running' || status === 'busy';
+      if (!shouldJoinStream) return;
+
+      const lastAiMessageResult = await client.conversations.searchMessages(
+        conversation.id,
+        {
+          where: { role: 'assistant' },
+          order: { createdAt: 'DESC' },
+          limit: 1,
+        },
+      );
+      const runId = lastAiMessageResult.items?.[0]?.executionId ?? null;
+      if (!runId) return;
+
+      const abortController = new AbortController();
+      abortRef.current?.abort();
+      abortRef.current = abortController;
+      setIsLoading(true);
+
+      try {
+        const stream = client.runs.joinStream(nextThreadId, runId, {
+          streamMode: lastStreamOptionsRef.current.streamMode,
+          signal: abortController.signal,
+        });
+
+        for await (const chunk of stream) {
+          applyStreamEvent(
+            chunk as StreamChunk,
+            setValues,
+            setError,
+            sendEvent,
+            handleInterrupt,
+            (executionId) => {
+              if (executionId) {
+                lastExecutionIdRef.current = executionId;
+              }
+            },
+          );
+        }
+      } catch (streamError) {
+        if (
+          !(
+            streamError instanceof DOMException &&
+            streamError.name === 'AbortError'
+          )
+        ) {
+          setError(streamError);
+        }
+      } finally {
+        if (abortRef.current === abortController) {
+          abortRef.current = null;
+        }
+        setIsLoading(false);
+      }
+    },
+    [client, handleInterrupt, loadThreadMessages, sendEvent, setThreadId, stop],
+  );
+
   const submit = useCallback(
     async (
       input?: TChatRequest | null,
@@ -796,6 +883,7 @@ const StreamSession = ({
     isLoading,
     isReady,
     error,
+    loadThread,
     loadThreadMessages,
     submit,
     stop,
