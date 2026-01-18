@@ -4,6 +4,7 @@ import React, {
   useContext,
   useMemo,
   useRef,
+  useEffect,
   useState,
   type ReactNode,
 } from 'react';
@@ -13,12 +14,14 @@ import {
   type Checkpoint,
   type Config,
   type StreamMode,
+  type ChatMessage,
 } from '@xpert-ai/xpert-sdk';
 import type { Message } from '@langchain/core/messages';
 import { type ToolCall } from '@langchain/core/messages/tool';
 import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent } from '@xpert-ai/chatkit-types';
 import { appendMessageContent } from '../lib/message';
-import { useParentMessenger, type ParentMessenger } from '../hooks/useParentMessenger';
+import { useParentMessenger } from '../hooks/useParentMessenger';
+import type { ParentMessenger } from './ParentMessenger';
 
 type ChatKitAIMessage = Message & { executionId?: string };
 
@@ -49,12 +52,19 @@ export type StreamContextType = {
   isLoading: boolean;
   isReady: boolean;
   error: unknown;
+  loadThreadMessages: (
+    threadId: string,
+  ) => Promise<ChatKitAIMessage[]>;
   submit: (
     values?: TChatRequest | null,
     options?: StreamSubmitOptions,
   ) => Promise<void>;
   stop: () => void;
-  reset: (newThreadId?: string | null, initialMessages?: ChatKitAIMessage[]) => void;
+  reset: (
+    newThreadId?: string | null,
+    initialMessages?: ChatKitAIMessage[],
+    options?: { suppressThreadChange?: boolean },
+  ) => void;
   setThreadId: (threadId: string | null) => void;
 };
 
@@ -63,6 +73,8 @@ const StreamContext = createContext<StreamContextType | undefined>(undefined);
 const defaultApiUrl =
   (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ??
   'https://api.mtda.cloud/api/ai';
+
+const DEFAULT_HISTORY_LIMIT = 200;
 
 function applyOptimisticValues(
   prev: StateType,
@@ -93,6 +105,36 @@ function createMessageId() {
     globalThis.crypto?.randomUUID?.() ??
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
   );
+}
+
+function normalizeRoleToMessageType(role?: string): Message['type'] {
+  const normalized = (role ?? '').toLowerCase();
+  if (normalized === 'user' || normalized === 'human') return 'human';
+  if (normalized === 'assistant' || normalized === 'ai') return 'ai';
+  if (normalized === 'system') return 'system';
+  if (normalized === 'tool') return 'tool';
+  return 'ai';
+}
+
+function mapChatMessageToUiMessage(message: ChatMessage): ChatKitAIMessage {
+  return {
+    id: message.id ?? createMessageId(),
+    type: normalizeRoleToMessageType(message.role),
+    content: message.content ?? '',
+    ...(message.reasoning ? { reasoning: message.reasoning as any } : {}),
+    ...(message.executionId ? { executionId: message.executionId } : {}),
+  } as ChatKitAIMessage;
+}
+
+function sortMessagesByCreatedAt(items: ChatMessage[]): ChatMessage[] {
+  return [...items].sort((a, b) => {
+    const aTime = Date.parse(a.createdAt ?? '');
+    const bTime = Date.parse(b.createdAt ?? '');
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime)) return -1;
+    if (Number.isNaN(bTime)) return 1;
+    return aTime - bTime;
+  });
 }
 
 function normalizeMessageType(value: unknown): ChatKitAIMessage['type'] | undefined {
@@ -534,7 +576,20 @@ const StreamSession = ({
     Pick<StreamSubmitOptions, 'streamMode' | 'streamSubgraphs' | 'streamResumable'>
   >({});
   const lastExecutionIdRef = useRef<string | null>(null);
+  const suppressThreadChangeRef = useRef(false);
   const { isParentAvailable, sendCommand, sendEvent } = useParentMessenger();
+
+  // Notify the host page when the active thread changes. The host maps
+  // `public_event` -> `chatkit.<event>` so sending ['thread.change', {...}]
+  // will become a `chatkit.thread.change` CustomEvent on the host element.
+  useEffect(() => {
+    if (!isParentAvailable) return;
+    if (suppressThreadChangeRef.current) {
+      suppressThreadChangeRef.current = false;
+      return;
+    }
+    sendEvent('public_event', ['thread.change', { threadId: threadId ?? null }]);
+  }, [threadId, isParentAvailable, sendEvent]);
 
   const client = useMemo(
     () => new Client<StateType>({ apiUrl, apiKey, defaultHeaders: {
@@ -549,7 +604,33 @@ const StreamSession = ({
     setIsLoading(false);
   }, []);
 
-  const reset = useCallback((newThreadId?: string | null, initialMessages?: ChatKitAIMessage[]) => {
+  const loadThreadMessages = useCallback(
+    async (threadId: string) => {
+      if (!apiUrl || !apiKey) {
+        throw new Error('Missing API configuration');
+      }
+      try {
+        stop();
+      } catch {
+        // ignore stop errors from an already-idle stream
+      }
+      const response = await client.conversations.listMessages(threadId, {
+        limit: DEFAULT_HISTORY_LIMIT,
+        offset: 0,
+      });
+      const sorted = sortMessagesByCreatedAt(response.items ?? []);
+      const mapped = sorted.map(mapChatMessageToUiMessage);
+      setValues({ messages: mapped ?? [] });
+      return mapped as ChatKitAIMessage[];
+    },
+    [apiKey, apiUrl, client, stop],
+  );
+
+  const reset = useCallback((
+    newThreadId?: string | null,
+    initialMessages?: ChatKitAIMessage[],
+    options?: { suppressThreadChange?: boolean },
+  ) => {
     abortRef.current?.abort();
     abortRef.current = null;
     setIsLoading(false);
@@ -557,9 +638,12 @@ const StreamSession = ({
     setValues({ messages: initialMessages ?? [] });
     lastExecutionIdRef.current = null;
     if (newThreadId !== undefined) {
+      if (options?.suppressThreadChange && newThreadId !== threadId) {
+        suppressThreadChangeRef.current = true;
+      }
       setThreadId(newThreadId);
     }
-  }, [setThreadId]);
+  }, [setThreadId, threadId]);
 
   const handleInterrupt = useCallback(
     async (data: unknown) => {
@@ -714,6 +798,7 @@ const StreamSession = ({
     isLoading,
     isReady,
     error,
+    loadThreadMessages,
     submit,
     stop,
     reset,

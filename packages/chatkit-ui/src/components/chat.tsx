@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { FileText, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
 
-import type { ChatMessage, Message } from '@xpert-ai/xpert-sdk';
+import type { Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
 
 /**
@@ -56,8 +56,6 @@ export type ChatProps = {
 };
 
 const defaultApiUrl = import.meta.env.VITE_XPERTAI_API_URL as string | undefined;
-const DEFAULT_HISTORY_LIMIT = 200;
-
 function createMessageId() {
   return (
     globalThis.crypto?.randomUUID?.() ??
@@ -94,36 +92,6 @@ function formatMessageContent(content: Message['content'][number]): string {
   return '';
 }
 
-function normalizeRoleToMessageType(role?: string): Message['type'] {
-  const normalized = (role ?? '').toLowerCase();
-  if (normalized === 'user' || normalized === 'human') return 'human';
-  if (normalized === 'assistant' || normalized === 'ai') return 'ai';
-  if (normalized === 'system') return 'system';
-  if (normalized === 'tool') return 'tool';
-  return 'ai';
-}
-
-function mapChatMessageToUiMessage(message: ChatMessage): Message {
-  return {
-    id: message.id ?? createMessageId(),
-    type: normalizeRoleToMessageType(message.role),
-    content: message.content ?? '',
-    ...(message.reasoning ? { reasoning: message.reasoning as any } : {}),
-    ...(message.executionId ? { executionId: message.executionId } : {}),
-  } as Message;
-}
-
-function sortMessagesByCreatedAt(items: ChatMessage[]): ChatMessage[] {
-  return [...items].sort((a, b) => {
-    const aTime = Date.parse(a.createdAt ?? '');
-    const bTime = Date.parse(b.createdAt ?? '');
-    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
-    if (Number.isNaN(aTime)) return -1;
-    if (Number.isNaN(bTime)) return 1;
-    return aTime - bTime;
-  });
-}
-
 export function Chat({
   className,
   options,
@@ -141,7 +109,7 @@ export function Chat({
   const {setStream} = useStreamManager();
   const stream = useStreamContext();
 
-  const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
+  // const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
   const [historyError, setHistoryError] = React.useState<string | null>(null);
   const [assistantName, setAssistantName] = React.useState<string | null>(null);
@@ -451,7 +419,7 @@ export function Chat({
   };
 
   const loadConversationMessages = React.useCallback(
-    async (conversationId: string, threadId?: string | null) => {
+    async (threadId: string) => {
       if (missingConfig) {
         setHistoryError(t('chat.missingConfigShort'));
         return;
@@ -459,25 +427,13 @@ export function Chat({
       setHistoryError(null);
       setIsHistoryLoading(true);
       try {
-        stream.stop();
-      } catch {
-        // ignore stop errors from an already-idle stream
-      }
-      try {
-        const response = await stream.client.conversations.listMessages(conversationId, {
-          limit: DEFAULT_HISTORY_LIMIT,
-          offset: 0,
-        });
-        const sorted = sortMessagesByCreatedAt(response.items ?? []);
-        const mapped = sorted.map(mapChatMessageToUiMessage);
-        stream.reset(threadId ?? null, mapped as Message[]);
-        setActiveConversationId(conversationId);
+        await stream.loadThreadMessages(threadId);
+        // setActiveConversationId(threadId ?? null);
       } catch (err) {
         console.warn('Failed to load conversation messages', err);
         setHistoryError(
           err instanceof Error ? err.message : t('chat.errors.loadMessages'),
         );
-        stream.reset(threadId ?? null, []);
       } finally {
         setIsHistoryLoading(false);
       }
@@ -485,33 +441,32 @@ export function Chat({
     [missingConfig, stream, t],
   );
 
-  React.useEffect(() => {
-    if (!stream.threadId) return;
-    if (isHistoryLoading) return;
-    const matched = conversations.find((item) => item.threadId === stream.threadId);
-    if (!matched) return;
-    if (activeConversationId && activeConversationId === matched.id) return;
-    if (messages.length > 0) {
-      setActiveConversationId(matched.id);
-      return;
-    }
-    // void loadConversationMessages(matched.id, matched.threadId ?? null);
-  }, [
-    conversations,
-    stream.threadId,
-    messages.length,
-    activeConversationId,
-    isHistoryLoading,
-    // loadConversationMessages,
-  ]);
+  // React.useEffect(() => {
+  //   if (!stream.threadId) return;
+  //   if (isHistoryLoading) return;
+  //   const matched = conversations.find((item) => item.threadId === stream.threadId);
+  //   if (!matched) return;
+  //   if (activeConversationId && activeConversationId === matched.id) return;
+  //   if (messages.length > 0) {
+  //     setActiveConversationId(matched.id);
+  //     return;
+  //   }
+  //   // void loadConversationMessages(matched.id, matched.threadId ?? null);
+  // }, [
+  //   conversations,
+  //   stream.threadId,
+  //   messages.length,
+  //   activeConversationId,
+  //   isHistoryLoading,
+  // ]);
 
   const handleNewConversation = async () => {
     if (missingConfig || stream.isLoading || isHistoryLoading) return;
     setHistoryError(null);
     try {
       const created = await createConversation({ title: t('history.newConversationTitle') });
-      setActiveConversationId(created.id);
-      stream.reset(created.threadId ?? null, []);
+      // setActiveConversationId(created.id);
+      stream.reset(created.id ?? null, []);
       await refreshConversations();
     } catch (err) {
       console.warn('Failed to create conversation', err);
@@ -524,19 +479,18 @@ export function Chat({
   const handleSelectConversation = (id: string) => {
     if (isHistoryLoading) return;
     setHistoryError(null);
-    const conversation = conversations.find((item) => item.id === id);
-    const nextThreadId = conversation?.threadId ?? null;
-    if (id === activeConversationId && stream.threadId === nextThreadId) return;
-    void loadConversationMessages(id, nextThreadId);
+    // const conversation = conversations.find((item) => item.id === id);
+    if (id === stream.threadId) return;
+    stream.reset(id, []);
+    void loadConversationMessages(id);
   };
 
   const handleDeleteConversation = (id: string) => {
     setHistoryError(null);
     void deleteConversation(id)
       .then(() => {
-        if (activeConversationId === id) {
+        if (stream.threadId === id) {
           stream.reset(null, []);
-          setActiveConversationId(null);
         }
         return refreshConversations();
       })
@@ -617,7 +571,7 @@ export function Chat({
             </button>
             <HistorySidebar
               conversations={conversations}
-              currentConversationId={activeConversationId ?? undefined}
+              currentConversationId={stream.threadId ?? undefined}
               onNewConversation={handleNewConversation}
               onSelectConversation={handleSelectConversation}
               onDeleteConversation={handleDeleteConversation}
