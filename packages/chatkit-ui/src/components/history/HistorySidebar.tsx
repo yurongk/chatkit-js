@@ -13,7 +13,13 @@ import {
 } from '../ui/sheet';
 
 export type ThreadItem = {
+  /**
+   * Thread ID
+   */
   id: string;
+  /**
+   * Conversation record ID
+   */
   recordId: string;
   title: string;
   lastMessageAt?: Date;
