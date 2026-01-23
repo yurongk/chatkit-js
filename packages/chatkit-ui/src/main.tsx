@@ -6,6 +6,7 @@ import { decodeBase64 } from '@xpert-ai/chatkit-web-shared';
 
 import App from './App';
 import './index.css';
+import { ParentMessengerProvider } from './providers/ParentMessenger';
 import { useParentMessenger } from './hooks/useParentMessenger';
 
 const getParentOrigin = () => {
@@ -120,7 +121,9 @@ const AppContainer = () => {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <NuqsAdapter>
-      <AppContainer />
+      <ParentMessengerProvider>
+        <AppContainer />
+      </ParentMessengerProvider>
     </NuqsAdapter>
   </React.StrictMode>,
 );

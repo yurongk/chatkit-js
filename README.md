@@ -75,13 +75,25 @@ export function MyChat() {
 chatkit-js/
 ├── packages/
 │   ├── chatkit/              # Core type definitions
+│   ├── chatkit-js/           # Vanilla JS factory helpers
 │   ├── chatkit-react/        # React bindings
 │   ├── chatkit-ui/           # Complete UI library
+│   ├── chatkit-vue/          # Vue bindings
 │   └── web-component/        # Web Component (framework-agnostic)
 ├── examples/
 │   └── managed-chatkit/      # Full-stack example
 └── docs/                    # Documentation
 ```
+
+## 📦 Packages
+
+- [@xpert-ai/chatkit](./packages/chatkit/)
+- [@xpert-ai/chatkit-react](./packages/chatkit-react/)
+- [@xpert-ai/chatkit-vue](./packages/chatkit-vue/)
+- [@xpert-ai/chatkit-ui](./packages/chatkit-ui/)
+- [@xpert-ai/chatkit-ui5](./packages/chatkit-ui5/)
+- [@xpert-ai/chatkit-web-component](./packages/web-component/)
+- [@xpert-ai/chatkit-js](./packages/chatkit-js/README.md)
 
 ## 🛠️ Development
 

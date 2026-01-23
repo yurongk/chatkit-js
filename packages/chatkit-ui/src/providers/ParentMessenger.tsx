@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { createContext, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { STATE_VARIABLE_HUMAN, type ChatKitOptions, type SendUserMessageParams } from "@xpert-ai/chatkit-types";
-import { useStreamManager } from "./useStream";
+import { useStreamManager } from "../hooks/useStream";
 
 type CommandMessageMap = {
   onSendUserMessage: SendUserMessageParams
   onSetOptions: ChatKitOptions | null;
+  onSetThreadId: { threadId: string | null };
   onClientToolCall: unknown;
   onGetClientSecret: unknown;
   onWidgetAction: {
@@ -41,33 +42,8 @@ type ParentMessage = ParentCommandMessage | ParentResponseMessage | ParentEventM
 
 type ParentEnvelope = Partial<ParentMessage> & { __xpaiChatKit: true };
 
-type MessageHandler = (event: MessageEvent) => void;
-
-const messageHandlers = new Set<MessageHandler>();
-let isListenerAttached = false;
 const handledSendUserMessageNonces = new Set<string>();
 const handledSendUserMessageEvents = new WeakSet<MessageEvent>();
-
-const sharedMessageHandler: MessageHandler = (event) => {
-  messageHandlers.forEach((handler) => handler(event));
-};
-
-const attachMessageListener = () => {
-  if (typeof window === "undefined") return;
-  if (isListenerAttached) return;
-  window.addEventListener("message", sharedMessageHandler);
-  isListenerAttached = true;
-  console.warn(`addEventListener message handleMessage`);
-};
-
-const detachMessageListener = () => {
-  if (typeof window === "undefined") return;
-  if (!isListenerAttached) return;
-  if (messageHandlers.size > 0) return;
-  window.removeEventListener("message", sharedMessageHandler);
-  isListenerAttached = false;
-  console.warn(`removeEventListener message handleMessage`);
-};
 
 const getParentOrigin = () => {
   if (typeof document === "undefined" || !document.referrer) return "*";
@@ -95,13 +71,21 @@ export type ParentMessenger = {
   sendEvent: (event: string, data?: [string, unknown], transfer?: Transferable[]) => void;
 };
 
-export type ParentMessengerOptions = {
-  onSetOptions?: (options: ChatKitOptions | null) => void;
+type OnSetOptionsHandler = (options: ChatKitOptions | null) => void;
+
+type ParentMessengerContextValue = ParentMessenger & {
+  registerOnSetOptions: (handler: OnSetOptionsHandler) => () => void;
 };
 
-export function useParentMessenger(
-  { onSetOptions }: ParentMessengerOptions = {},
-): ParentMessenger {
+export const ParentMessengerContext = createContext<ParentMessengerContextValue | null>(null);
+
+export type ParentMessengerProviderProps = {
+  children: ReactNode;
+};
+
+export function ParentMessengerProvider({
+  children,
+}: ParentMessengerProviderProps) {
   const { streamRef } = useStreamManager();
   const parentOriginRef = useRef<string>("*");
   const pendingRef = useRef(
@@ -110,6 +94,7 @@ export function useParentMessenger(
       { resolve: (value: unknown) => void; reject: (error: unknown) => void }
     >(),
   );
+  const onSetOptionsHandlersRef = useRef(new Set<OnSetOptionsHandler>());
 
   const isParentAvailable = useMemo(() => {
     return typeof window !== "undefined" && window.parent !== window;
@@ -119,14 +104,17 @@ export function useParentMessenger(
     parentOriginRef.current = getParentOrigin();
   }, []);
 
-  // Store callback in ref to avoid stale closure issues
-  const onSetOptionsRef = useRef(onSetOptions);
-  useEffect(() => {
-    onSetOptionsRef.current = onSetOptions;
-  }, [onSetOptions]);
+  const registerOnSetOptions = useCallback((handler: OnSetOptionsHandler) => {
+    onSetOptionsHandlersRef.current.add(handler);
+    return () => {
+      onSetOptionsHandlersRef.current.delete(handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isParentAvailable) return;
+
+    console.log(`ParentMessenger initialized, parentOrigin ...`);
 
     const sendResponse = (nonce: string, response?: unknown, error?: unknown) => {
       const message: ParentEnvelope = {
@@ -163,6 +151,7 @@ export function useParentMessenger(
         }
 
         const params = payload.data as SendUserMessageParams
+
         streamRef.current?.submit({
           input: {
             input: params.text,
@@ -170,8 +159,9 @@ export function useParentMessenger(
           state: {
             ...(params.state || {}),
             [STATE_VARIABLE_HUMAN]: {
-              input: params.text,
-            }
+              ...(params.state?.[STATE_VARIABLE_HUMAN] || {}),
+              input: params.text ?? params.state?.[STATE_VARIABLE_HUMAN]?.input,
+            },
           }
         }, {
           newThread: params.newThread,
@@ -182,12 +172,32 @@ export function useParentMessenger(
         return;
       }
 
+      // Handle `setOptions` command
       if (payload.type == "command" && payload.command === "onSetOptions") {
-        if (onSetOptionsRef.current) {
-          onSetOptionsRef.current(payload.data as ChatKitOptions | null);
+        if (onSetOptionsHandlersRef.current.size > 0) {
+          onSetOptionsHandlersRef.current.forEach((handler) => {
+            handler(payload.data as ChatKitOptions | null);
+          });
         }
         if (payload.nonce) {
           sendResponse(payload.nonce, { ok: true });
+        }
+        return;
+      }
+
+      // Handle `setThreadId` command
+      if (payload.type == "command" && payload.command === "onSetThreadId") {
+        const data = payload.data as
+          | { threadId: string | null }
+          | null
+          | undefined;
+        const nextThreadId = data?.threadId ?? null;
+        const stream = streamRef.current;
+        stream?.reset(nextThreadId, undefined, { suppressThreadChange: true });
+        if (stream && nextThreadId) {
+          stream.loadThread(nextThreadId).catch((err) => {
+              console.warn('Failed to load thread messages', err);
+            });
         }
         return;
       }
@@ -205,11 +215,9 @@ export function useParentMessenger(
       pendingRef.current.delete(payload.nonce);
     };
 
-    messageHandlers.add(handleMessage);
-    attachMessageListener();
+    window.addEventListener("message", handleMessage);
     return () => {
-      messageHandlers.delete(handleMessage);
-      detachMessageListener();
+      window.removeEventListener("message", handleMessage);
       pendingRef.current.forEach((handler) => {
         handler.reject(new Error("Parent messenger closed"));
       });
@@ -254,9 +262,19 @@ export function useParentMessenger(
     [isParentAvailable],
   );
 
-  return {
-    isParentAvailable,
-    sendCommand,
-    sendEvent,
-  };
+  const value = useMemo(
+    () => ({
+      isParentAvailable,
+      sendCommand,
+      sendEvent,
+      registerOnSetOptions,
+    }),
+    [isParentAvailable, sendCommand, sendEvent, registerOnSetOptions],
+  );
+
+  return (
+    <ParentMessengerContext.Provider value={value}>
+      {children}
+    </ParentMessengerContext.Provider>
+  );
 }
