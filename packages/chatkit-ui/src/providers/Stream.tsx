@@ -394,7 +394,7 @@ function applyStreamEvent(
   setValues: React.Dispatch<React.SetStateAction<StateType>>,
   setError: React.Dispatch<React.SetStateAction<unknown>>,
   sendEvent: ParentMessenger['sendEvent'],
-  onInterrupt?: (data: unknown) => void | Promise<void>,
+  interrupts: unknown[],
   onExecutionId?: (executionId: string | undefined) => void,
 ) {
   const parsed = parseEventData(chunk.data);
@@ -522,15 +522,16 @@ function applyStreamEvent(
         break;
       }
       case ChatMessageEventTypeEnum.ON_INTERRUPT: {
-        if (onInterrupt) {
-          const maybePromise = onInterrupt(payload.data);
-          if (
-            maybePromise &&
-            typeof (maybePromise as Promise<void>).catch === 'function'
-          ) {
-            (maybePromise as Promise<void>).catch(setError);
-          }
-        }
+        interrupts.push(payload.data);
+        // if (onInterrupt) {
+        //   const maybePromise = onInterrupt(payload.data);
+        //   if (
+        //     maybePromise &&
+        //     typeof (maybePromise as Promise<void>).catch === 'function'
+        //   ) {
+        //     (maybePromise as Promise<void>).catch(setError);
+        //   }
+        // }
         break;
       }
       case ChatMessageEventTypeEnum.ON_CLIENT_EFFECT: {
@@ -576,6 +577,9 @@ const StreamSession = ({
     Pick<StreamSubmitOptions, 'streamMode' | 'streamSubgraphs' | 'streamResumable'>
   >({});
   const lastExecutionIdRef = useRef<string | null>(null);
+  const lastEventIdRef = useRef<string | null>(null);
+  // Track the previous threadId so we only reset SSE state on actual thread changes.
+  const lastThreadIdRef = useRef<string | null>(threadId ?? null);
   const suppressThreadChangeRef = useRef(false);
   const { isParentAvailable, sendCommand, sendEvent } = useParentMessenger();
 
@@ -591,9 +595,37 @@ const StreamSession = ({
     sendEvent('public_event', ['thread.change', { threadId: threadId ?? null }]);
   }, [threadId, isParentAvailable, sendEvent]);
 
+  useEffect(() => {
+    const currentThreadId = threadId ?? null;
+    if (lastThreadIdRef.current !== currentThreadId) {
+      lastThreadIdRef.current = currentThreadId;
+      lastEventIdRef.current = null;
+    }
+  }, [threadId]);
+
   const client = useMemo(
     () => new Client<StateType>({ apiUrl, apiKey, defaultHeaders: {
       'Authorization': apiKey ? `Bearer ${apiKey}` : undefined,
+    },
+    onRequest: (url: URL, init: RequestInit) => {
+      const lastEventId = lastEventIdRef.current;
+      if (lastEventId && url.pathname.endsWith('/runs/stream')) {
+        const headers = init.headers;
+        if (!headers) {
+          init.headers = { 'Last-Event-ID': lastEventId };
+          return init;
+        }
+        if (headers instanceof Headers) {
+          headers.set('Last-Event-ID', lastEventId);
+          return init;
+        }
+        if (Array.isArray(headers)) {
+          init.headers = [...headers, ['Last-Event-ID', lastEventId]];
+          return init;
+        }
+        (headers as Record<string, string>)['Last-Event-ID'] = lastEventId;
+      }
+      return init;
     } }),
     [apiKey, apiUrl],
   );
@@ -644,6 +676,7 @@ const StreamSession = ({
     setError(null);
     setValues({ messages: initialMessages ?? [] });
     lastExecutionIdRef.current = null;
+    lastEventIdRef.current = null;
     if (newThreadId !== undefined) {
       if (options?.suppressThreadChange && newThreadId !== threadId) {
         suppressThreadChangeRef.current = true;
@@ -697,6 +730,65 @@ const StreamSession = ({
     },
     [isParentAvailable, sendCommand, setError],
   );
+  
+  const runStream = useCallback(async (
+    nextThreadId: string,
+    input?: TChatRequest | null,
+    options?: StreamSubmitOptions,
+  ) => {
+    const abortController = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = abortController;
+    setIsLoading(true);
+
+    try {
+      const stream = client.runs.stream(nextThreadId, assistantId, {
+        input: input ?? null,
+        context: options?.context,
+        config: options?.config,
+        checkpoint: options?.checkpoint ?? undefined,
+        streamMode: options?.streamMode,
+        streamSubgraphs: options?.streamSubgraphs,
+        streamResumable: options?.streamResumable,
+        signal: abortController.signal,
+        onDisconnect: 'continue'
+      });
+
+      const interrupts: unknown[] = []
+      for await (const chunk of stream) {
+        if (chunk?.id) {
+          lastEventIdRef.current = String(chunk.id);
+        }
+        applyStreamEvent(
+          chunk as StreamChunk,
+          setValues,
+          setError,
+          sendEvent,
+          interrupts,
+          (executionId) => {
+            if (executionId) {
+              lastExecutionIdRef.current = executionId;
+            }
+          },
+        );
+      }
+
+      if (interrupts.length > 0) {
+        for await (const interruptData of interrupts) {
+          await handleInterrupt(interruptData);
+        }
+      }
+    } catch (streamError) {
+      if (!(streamError instanceof DOMException && streamError.name === 'AbortError')) {
+        setError(streamError);
+      }
+    } finally {
+      if (abortRef.current === abortController) {
+        abortRef.current = null;
+      }
+      setIsLoading(false);
+    }
+  }, [assistantId, client, sendEvent, handleInterrupt]);
 
   const loadThread = useCallback(
     async (threadId: string) => {
@@ -710,6 +802,7 @@ const StreamSession = ({
       }
 
       setThreadId(threadId);
+      lastEventIdRef.current = null;
 
       const conversationResult = await client.conversations.search({
         where: { threadId: threadId },
@@ -724,7 +817,6 @@ const StreamSession = ({
 
       await loadConversationMessages(conversation.id);
 
-      console.log('Conversation:', conversation);
       const status = String(conversation.status ?? '').toLowerCase();
       const shouldJoinStream = !status || status === 'running' || status === 'busy';
       if (!shouldJoinStream) return;
@@ -741,48 +833,52 @@ const StreamSession = ({
       if (!runId) return;
       lastExecutionIdRef.current = runId;
 
-      const abortController = new AbortController();
-      abortRef.current?.abort();
-      abortRef.current = abortController;
-      setIsLoading(true);
+      await runStream(threadId, null, {});
 
-      try {
-        const stream = client.runs.joinStream(threadId, runId, {
-          streamMode: lastStreamOptionsRef.current.streamMode,
-          signal: abortController.signal,
-        });
+      // const abortController = new AbortController();
+      // abortRef.current?.abort();
+      // abortRef.current = abortController;
+      // setIsLoading(true);
 
-        for await (const chunk of stream) {
-          applyStreamEvent(
-            chunk as StreamChunk,
-            setValues,
-            setError,
-            sendEvent,
-            handleInterrupt,
-            (executionId) => {
-              if (executionId) {
-                lastExecutionIdRef.current = executionId;
-              }
-            },
-          );
-        }
-      } catch (streamError) {
-        if (
-          !(
-            streamError instanceof DOMException &&
-            streamError.name === 'AbortError'
-          )
-        ) {
-          setError(streamError);
-        }
-      } finally {
-        if (abortRef.current === abortController) {
-          abortRef.current = null;
-        }
-        setIsLoading(false);
-      }
+      // try {
+      //   const stream = client.runs.joinStream(threadId, runId, {
+      //     streamMode: lastStreamOptionsRef.current.streamMode,
+      //     signal: abortController.signal,
+      //   });
+
+      //   const interrupts: unknown[] = []
+      //   for await (const chunk of stream) {
+      //     if (chunk?.id) {
+      //       lastEventIdRef.current = String(chunk.id);
+      //     }
+      //     applyStreamEvent(
+      //       chunk as StreamChunk,
+      //       setValues,
+      //       setError,
+      //       sendEvent,
+      //       interrupts,
+      //       (executionId) => {
+      //         if (executionId) {
+      //           lastExecutionIdRef.current = executionId;
+      //         }
+      //       },
+      //     );
+      //   }
+      // } catch (streamError) {
+      //   if (!(
+      //       streamError instanceof DOMException &&
+      //       streamError.name === 'AbortError'
+      //     )) {
+      //     setError(streamError);
+      //   }
+      // } finally {
+      //   if (abortRef.current === abortController) {
+      //     abortRef.current = null;
+      //   }
+      //   setIsLoading(false);
+      // }
     },
-    [client, handleInterrupt, loadConversationMessages, sendEvent, setThreadId, stop],
+    [client, runStream, stop, loadConversationMessages, setThreadId],
   );
 
   const submit = useCallback(
@@ -790,10 +886,11 @@ const StreamSession = ({
       input?: TChatRequest | null,
       options?: StreamSubmitOptions,
     ) => {
-      if (isLoading) {
-        return;
-      }
+      // if (isLoading) {
+      //   return;
+      // }
       setError(null);
+      const previousThreadId = threadId ?? null;
       lastStreamOptionsRef.current = {
         streamMode: options?.streamMode,
         streamSubgraphs: options?.streamSubgraphs,
@@ -803,6 +900,7 @@ const StreamSession = ({
       if (shouldStartNewThread) {
         setValues({ messages: [] });
         lastExecutionIdRef.current = null;
+        lastEventIdRef.current = null;
       }
       const optimistic = options?.optimisticValues;
       if (optimistic) {
@@ -831,51 +929,60 @@ const StreamSession = ({
         nextThreadId = desiredThreadId;
         setThreadId(desiredThreadId);
       }
-
-      const abortController = new AbortController();
-      abortRef.current?.abort();
-      abortRef.current = abortController;
-      setIsLoading(true);
-
-      try {
-        const stream = client.runs.stream(nextThreadId, assistantId, {
-          input: input ?? null,
-          context: options?.context,
-          config: options?.config,
-          checkpoint: options?.checkpoint ?? undefined,
-          streamMode: options?.streamMode,
-          streamSubgraphs: options?.streamSubgraphs,
-          streamResumable: options?.streamResumable,
-          signal: abortController.signal,
-          onDisconnect: 'continue'
-        });
-
-        for await (const chunk of stream) {
-          applyStreamEvent(
-            chunk as StreamChunk,
-            setValues,
-            setError,
-            sendEvent,
-            handleInterrupt,
-            (executionId) => {
-              if (executionId) {
-                lastExecutionIdRef.current = executionId;
-              }
-            },
-          );
-        }
-      } catch (streamError) {
-        if (!(streamError instanceof DOMException && streamError.name === 'AbortError')) {
-          setError(streamError);
-        }
-      } finally {
-        if (abortRef.current === abortController) {
-          abortRef.current = null;
-        }
-        setIsLoading(false);
+      if (nextThreadId !== previousThreadId) {
+        lastEventIdRef.current = null;
       }
+
+      await runStream(nextThreadId, input, options);
+
+      // const abortController = new AbortController();
+      // abortRef.current?.abort();
+      // abortRef.current = abortController;
+      // setIsLoading(true);
+
+      // try {
+      //   const stream = client.runs.stream(nextThreadId, assistantId, {
+      //     input: input ?? null,
+      //     context: options?.context,
+      //     config: options?.config,
+      //     checkpoint: options?.checkpoint ?? undefined,
+      //     streamMode: options?.streamMode,
+      //     streamSubgraphs: options?.streamSubgraphs,
+      //     streamResumable: options?.streamResumable,
+      //     signal: abortController.signal,
+      //     onDisconnect: 'continue'
+      //   });
+
+      //   const interrupts: unknown[] = []
+      //   for await (const chunk of stream) {
+      //     if (chunk?.id) {
+      //       lastEventIdRef.current = String(chunk.id);
+      //     }
+      //     applyStreamEvent(
+      //       chunk as StreamChunk,
+      //       setValues,
+      //       setError,
+      //       sendEvent,
+      //       interrupts,
+      //       (executionId) => {
+      //         if (executionId) {
+      //           lastExecutionIdRef.current = executionId;
+      //         }
+      //       },
+      //     );
+      //   }
+      // } catch (streamError) {
+      //   if (!(streamError instanceof DOMException && streamError.name === 'AbortError')) {
+      //     setError(streamError);
+      //   }
+      // } finally {
+      //   if (abortRef.current === abortController) {
+      //     abortRef.current = null;
+      //   }
+      //   setIsLoading(false);
+      // }
     },
-    [assistantId, client, handleInterrupt, isLoading, setThreadId, sendEvent, threadId],
+    [client, runStream, setThreadId, threadId],
   );
 
   submitRef.current = submit;

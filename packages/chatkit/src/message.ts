@@ -259,6 +259,11 @@ export type TChatRequest = {
   confirm?: boolean
   command?: TInterruptCommand
   retry?: boolean
+  /**
+   * PRO: Sandbox Environment Id
+   * PRO: @description Sandbox environment ID to force using the specified container.
+   */
+  sandboxEnvironmentId?: string;
 }
 
 /**
