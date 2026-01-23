@@ -42,7 +42,6 @@ import { AssistantMessage } from './thread/messages/ai';
 import { MessageActions } from './thread/MessageActions';
 import { StartScreen } from './thread/StartScreen';
 // Avatar import removed - AI avatar disabled
-import { ScrollArea } from './ui/scroll-area';
 import { useStreamManager } from '../hooks/useStream';
 import { useThreads } from '../hooks/useThreads';
 import { useChatkitTranslation } from '../i18n/useChatkitTranslation';
@@ -162,7 +161,6 @@ export function Chat({
     refreshThreads,
     isLoading: isThreadsLoading,
   } = useThreads();
-  const scrollAreaRef = React.useRef<HTMLDivElement>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -179,8 +177,7 @@ export function Chat({
   const scrollToBottom = React.useCallback((smooth = false) => {
     // Use requestAnimationFrame to ensure DOM has updated
     requestAnimationFrame(() => {
-      // Find the actual Radix ScrollArea Viewport element
-      const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+      const viewport = viewportRef.current;
       if (viewport) {
         viewport.scrollTo({
           top: viewport.scrollHeight,
@@ -524,11 +521,11 @@ export function Chat({
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-col overflow-hidden bg-background shadow-sm',
+        'flex h-full w-full flex-col flex-1 overflow-y-auto bg-background shadow-sm',
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b bg-muted/30 px-6 py-2">
+      <div className="flex items-center justify-between border-b px-6 py-2 sticky top-0 z-10 bg-background">
         <div className="flex items-center gap-3">
           <div className="h-2 w-2 rounded-full bg-green-500"></div>
           <div>
@@ -567,153 +564,151 @@ export function Chat({
         )}
       </div>
 
-      <ScrollArea ref={scrollAreaRef} className="flex-1">
-        <div ref={viewportRef} className="px-6 py-4">
-          {errorMessage && (
-            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {errorMessage}
-            </div>
-          )}
-          {historyError && (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {historyError}
-            </div>
-          )}
-          {missingConfig && (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {t('chat.missingConfigDetail')}
-            </div>
-          )}
-          {isHistoryLoading && (
-            <div className="mb-4 rounded-lg border border-muted px-3 py-2 text-sm text-muted-foreground">
-              {t('chat.loadingThread')}
-            </div>
-          )}
-          {messages.length === 0 ? (
-            <StartScreen
-              startScreen={startScreen}
-              onPromptClick={handlePromptClick}
-            />
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message, index) => {
-                const messageType = String(message.type);
-                const isAssistantMessage =
-                  messageType === 'assistant' || messageType === 'ai';
+      <div ref={viewportRef} className="px-6 py-4">
+        {errorMessage && (
+          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {errorMessage}
+          </div>
+        )}
+        {historyError && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {historyError}
+          </div>
+        )}
+        {missingConfig && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {t('chat.missingConfigDetail')}
+          </div>
+        )}
+        {isHistoryLoading && (
+          <div className="mb-4 rounded-lg border border-muted px-3 py-2 text-sm text-muted-foreground">
+            {t('chat.loadingThread')}
+          </div>
+        )}
+        {messages.length === 0 ? (
+          <StartScreen
+            startScreen={startScreen}
+            onPromptClick={handlePromptClick}
+          />
+        ) : (
+          <div className="space-y-4">
+            {messages.map((message, index) => {
+              const messageType = String(message.type);
+              const isAssistantMessage =
+                messageType === 'assistant' || messageType === 'ai';
 
-                const messageContent =
-                  typeof message.content === 'string'
-                    ? message.content
-                    : Array.isArray(message.content)
-                      ? message.content.map((part) => formatMessageContent(part as any)).join('')
-                      : formatMessageContent(message.content);
+              const messageContent =
+                typeof message.content === 'string'
+                  ? message.content
+                  : Array.isArray(message.content)
+                    ? message.content.map((part) => formatMessageContent(part as any)).join('')
+                    : formatMessageContent(message.content);
 
-                return (
-                  <div
-                    key={message.id ?? `${message.type}-${index}`}
-                    className={cn(
-                      'group flex gap-3',
-                      message.type === 'human'
-                        ? 'justify-end'
-                        : 'justify-start -ml-1',  // AI messages: slightly closer to left
-                    )}
-                  >
-                    <div className="flex flex-col">
-                      <div
-                        className={cn(
-                          'max-w-full rounded-2xl',
-                          message.type === 'human'
-                            ? 'bg-primary text-primary-foreground px-4 py-2.5'
-                            : message.type === 'system'
-                              ? 'bg-muted text-muted-foreground text-xs px-4 py-2.5'
-                              : 'py-1 text-chat-foreground',  // AI messages: use chat-specific foreground color
-                        )}
-                      >
-                        {isAssistantMessage ? (
-                          <AssistantMessage
-                            message={{
-                              ...(message as ChatkitMessage),
-                              type: 'assistant',
-                            }}
-                            isStreaming={stream.isLoading && index === messages.length - 1}
-                          />
-                        ) : (
-                          <>
-                            {/* Show attachments for human messages */}
-                            {message.type === 'human' && (message as any).attachments?.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mb-2">
-                                {((message as any).attachments as Array<{ originalName: string; mimetype: string }>).map((file, fileIndex) => (
-                                  <div
-                                    key={fileIndex}
-                                    className="flex items-center gap-1.5 rounded-md bg-primary-foreground/20 px-2 py-1 text-xs"
-                                  >
-                                    <FileText size={12} />
-                                    <span className="max-w-[100px] truncate">{file.originalName}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {Array.isArray(message.content) ? (
-                              message.content.map((part, partIndex) => (
-                                <p
-                                  key={`${part.type}-${partIndex}`}
-                                  className="break-words text-sm leading-relaxed"
+              return (
+                <div
+                  key={message.id ?? `${message.type}-${index}`}
+                  className={cn(
+                    'group flex gap-3',
+                    message.type === 'human'
+                      ? 'justify-end'
+                      : 'justify-start -ml-1',  // AI messages: slightly closer to left
+                  )}
+                >
+                  <div className="flex flex-col overflow-hidden">
+                    <div
+                      className={cn(
+                        'max-w-full rounded-2xl',
+                        message.type === 'human'
+                          ? 'bg-primary text-primary-foreground px-4 py-2.5'
+                          : message.type === 'system'
+                            ? 'bg-muted text-muted-foreground text-xs px-4 py-2.5'
+                            : 'py-1 text-chat-foreground',  // AI messages: use chat-specific foreground color
+                      )}
+                    >
+                      {isAssistantMessage ? (
+                        <AssistantMessage
+                          message={{
+                            ...(message as ChatkitMessage),
+                            type: 'assistant',
+                          }}
+                          isStreaming={stream.isLoading && index === messages.length - 1}
+                        />
+                      ) : (
+                        <>
+                          {/* Show attachments for human messages */}
+                          {message.type === 'human' && (message as any).attachments?.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {((message as any).attachments as Array<{ originalName: string; mimetype: string }>).map((file, fileIndex) => (
+                                <div
+                                  key={fileIndex}
+                                  className="flex items-center gap-1.5 rounded-md bg-primary-foreground/20 px-2 py-1 text-xs"
                                 >
-                                  {formatMessageContent(part as any)}
-                                </p>
-                              ))
-                            ) : (
-                              <span className="break-words text-sm leading-relaxed">
-                                {formatMessageContent(message.content)}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                      {/* Message actions - hidden during streaming, retry only for last AI message */}
-                      <MessageActions
-                        content={messageContent}
-                        isAssistant={isAssistantMessage}
-                        isStreaming={stream.isLoading && index === messages.length - 1}
-                        onRetry={
-                          isAssistantMessage && !stream.isLoading && index === messages.length - 1
-                            ? () => handleRetry(index)
-                            : undefined
-                        }
-                      />
+                                  <FileText size={12} />
+                                  <span className="max-w-[100px] truncate">{file.originalName}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {Array.isArray(message.content) ? (
+                            message.content.map((part, partIndex) => (
+                              <p
+                                key={`${part.type}-${partIndex}`}
+                                className="break-words text-sm leading-relaxed"
+                              >
+                                {formatMessageContent(part as any)}
+                              </p>
+                            ))
+                          ) : (
+                            <span className="break-words text-sm leading-relaxed">
+                              {formatMessageContent(message.content)}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {/* Message actions - hidden during streaming, retry only for last AI message */}
+                    <MessageActions
+                      content={messageContent}
+                      isAssistant={isAssistantMessage}
+                      isStreaming={stream.isLoading && index === messages.length - 1}
+                      onRetry={
+                        isAssistantMessage && !stream.isLoading && index === messages.length - 1
+                          ? () => handleRetry(index)
+                          : undefined
+                      }
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            {/* Show loading indicator with minimum display time */}
+            {showLoadingDots && (() => {
+              const lastMessage = messages[messages.length - 1];
+              const lastMessageType = lastMessage ? String(lastMessage.type) : '';
+              const isLastMessageFromAI = lastMessageType === 'ai' || lastMessageType === 'assistant';
+              // Hide dots once AI has substantial content
+              const lastMsgContent = lastMessage?.content;
+              const hasSubstantialContent = isLastMessageFromAI &&
+                ((typeof lastMsgContent === 'string' && lastMsgContent.length > 10) ||
+                  (Array.isArray(lastMsgContent) && lastMsgContent.length > 0));
+              if (hasSubstantialContent) return null;
+              return (
+                <div className="flex justify-start gap-3 -ml-2">
+                  <div className="max-w-full rounded-2xl py-2.5">
+                    <div className="flex gap-1.5">
+                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]"></div>
+                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]"></div>
+                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60"></div>
                     </div>
                   </div>
-                );
-              })}
-              {/* Show loading indicator with minimum display time */}
-              {showLoadingDots && (() => {
-                const lastMessage = messages[messages.length - 1];
-                const lastMessageType = lastMessage ? String(lastMessage.type) : '';
-                const isLastMessageFromAI = lastMessageType === 'ai' || lastMessageType === 'assistant';
-                // Hide dots once AI has substantial content
-                const lastMsgContent = lastMessage?.content;
-                const hasSubstantialContent = isLastMessageFromAI &&
-                  ((typeof lastMsgContent === 'string' && lastMsgContent.length > 10) ||
-                   (Array.isArray(lastMsgContent) && lastMsgContent.length > 0));
-                if (hasSubstantialContent) return null;
-                return (
-                  <div className="flex justify-start gap-3 -ml-2">
-                    <div className="max-w-full rounded-2xl py-2.5">
-                      <div className="flex gap-1.5">
-                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]"></div>
-                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]"></div>
-                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60"></div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
 
-      <div className="border-t bg-muted/30 p-4">
+      <div className="p-2 sticky bottom-0 z-10 bg-background">
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
