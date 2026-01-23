@@ -4,6 +4,7 @@ import React, {
   useContext,
   useMemo,
   useRef,
+  useEffect,
   useState,
   type ReactNode,
 } from 'react';
@@ -13,12 +14,14 @@ import {
   type Checkpoint,
   type Config,
   type StreamMode,
+  type ChatMessage,
 } from '@xpert-ai/xpert-sdk';
 import type { Message } from '@langchain/core/messages';
 import { type ToolCall } from '@langchain/core/messages/tool';
 import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent } from '@xpert-ai/chatkit-types';
 import { appendMessageContent } from '../lib/message';
-import { useParentMessenger, type ParentMessenger } from '../hooks/useParentMessenger';
+import { useParentMessenger } from '../hooks/useParentMessenger';
+import type { ParentMessenger } from './ParentMessenger';
 
 type ChatKitAIMessage = Message & { executionId?: string };
 
@@ -49,12 +52,18 @@ export type StreamContextType = {
   isLoading: boolean;
   isReady: boolean;
   error: unknown;
+  loadThread: (threadId: string) => Promise<void>;
+  loadConversationMessages: (recordId: string) => Promise<ChatKitAIMessage[]>;
   submit: (
     values?: TChatRequest | null,
     options?: StreamSubmitOptions,
   ) => Promise<void>;
   stop: () => void;
-  reset: (newThreadId?: string | null, initialMessages?: ChatKitAIMessage[]) => void;
+  reset: (
+    newThreadId?: string | null,
+    initialMessages?: ChatKitAIMessage[],
+    options?: { suppressThreadChange?: boolean },
+  ) => void;
   setThreadId: (threadId: string | null) => void;
 };
 
@@ -63,6 +72,8 @@ const StreamContext = createContext<StreamContextType | undefined>(undefined);
 const defaultApiUrl =
   (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ??
   'https://api.mtda.cloud/api/ai';
+
+const DEFAULT_HISTORY_LIMIT = 200;
 
 function applyOptimisticValues(
   prev: StateType,
@@ -93,6 +104,37 @@ function createMessageId() {
     globalThis.crypto?.randomUUID?.() ??
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
   );
+}
+
+function normalizeRoleToMessageType(role?: string): Message['type'] {
+  const normalized = (role ?? '').toLowerCase();
+  if (normalized === 'user' || normalized === 'human') return 'human';
+  if (normalized === 'assistant' || normalized === 'ai') return 'ai';
+  if (normalized === 'system') return 'system';
+  if (normalized === 'tool') return 'tool';
+  return 'ai';
+}
+
+
+function mapChatMessageToUiMessage(message: ChatMessage): ChatKitAIMessage {
+  return {
+    id: message.id ?? createMessageId(),
+    type: normalizeRoleToMessageType(message.role),
+    content: message.content ?? '',
+    ...(message.reasoning ? { reasoning: message.reasoning as any } : {}),
+    ...(message.executionId ? { executionId: message.executionId } : {}),
+  } as ChatKitAIMessage;
+}
+
+function sortMessagesByCreatedAt(items: ChatMessage[]): ChatMessage[] {
+  return [...items].sort((a, b) => {
+    const aTime = Date.parse(a.createdAt ?? '');
+    const bTime = Date.parse(b.createdAt ?? '');
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime)) return -1;
+    if (Number.isNaN(bTime)) return 1;
+    return aTime - bTime;
+  });
 }
 
 function normalizeMessageType(value: unknown): ChatKitAIMessage['type'] | undefined {
@@ -352,7 +394,7 @@ function applyStreamEvent(
   setValues: React.Dispatch<React.SetStateAction<StateType>>,
   setError: React.Dispatch<React.SetStateAction<unknown>>,
   sendEvent: ParentMessenger['sendEvent'],
-  onInterrupt?: (data: unknown) => void | Promise<void>,
+  interrupts: unknown[],
   onExecutionId?: (executionId: string | undefined) => void,
 ) {
   const parsed = parseEventData(chunk.data);
@@ -480,15 +522,16 @@ function applyStreamEvent(
         break;
       }
       case ChatMessageEventTypeEnum.ON_INTERRUPT: {
-        if (onInterrupt) {
-          const maybePromise = onInterrupt(payload.data);
-          if (
-            maybePromise &&
-            typeof (maybePromise as Promise<void>).catch === 'function'
-          ) {
-            (maybePromise as Promise<void>).catch(setError);
-          }
-        }
+        interrupts.push(payload.data);
+        // if (onInterrupt) {
+        //   const maybePromise = onInterrupt(payload.data);
+        //   if (
+        //     maybePromise &&
+        //     typeof (maybePromise as Promise<void>).catch === 'function'
+        //   ) {
+        //     (maybePromise as Promise<void>).catch(setError);
+        //   }
+        // }
         break;
       }
       case ChatMessageEventTypeEnum.ON_CLIENT_EFFECT: {
@@ -534,32 +577,113 @@ const StreamSession = ({
     Pick<StreamSubmitOptions, 'streamMode' | 'streamSubgraphs' | 'streamResumable'>
   >({});
   const lastExecutionIdRef = useRef<string | null>(null);
+  const lastEventIdRef = useRef<string | null>(null);
+  // Track the previous threadId so we only reset SSE state on actual thread changes.
+  const lastThreadIdRef = useRef<string | null>(threadId ?? null);
+  const suppressThreadChangeRef = useRef(false);
   const { isParentAvailable, sendCommand, sendEvent } = useParentMessenger();
+
+  // Notify the host page when the active thread changes. The host maps
+  // `public_event` -> `chatkit.<event>` so sending ['thread.change', {...}]
+  // will become a `chatkit.thread.change` CustomEvent on the host element.
+  useEffect(() => {
+    if (!isParentAvailable) return;
+    if (suppressThreadChangeRef.current) {
+      suppressThreadChangeRef.current = false;
+      return;
+    }
+    sendEvent('public_event', ['thread.change', { threadId: threadId ?? null }]);
+  }, [threadId, isParentAvailable, sendEvent]);
+
+  useEffect(() => {
+    const currentThreadId = threadId ?? null;
+    if (lastThreadIdRef.current !== currentThreadId) {
+      lastThreadIdRef.current = currentThreadId;
+      lastEventIdRef.current = null;
+    }
+  }, [threadId]);
 
   const client = useMemo(
     () => new Client<StateType>({ apiUrl, apiKey, defaultHeaders: {
       'Authorization': apiKey ? `Bearer ${apiKey}` : undefined,
+    },
+    onRequest: (url: URL, init: RequestInit) => {
+      const lastEventId = lastEventIdRef.current;
+      if (lastEventId && url.pathname.endsWith('/runs/stream')) {
+        const headers = init.headers;
+        if (!headers) {
+          init.headers = { 'Last-Event-ID': lastEventId };
+          return init;
+        }
+        if (headers instanceof Headers) {
+          headers.set('Last-Event-ID', lastEventId);
+          return init;
+        }
+        if (Array.isArray(headers)) {
+          init.headers = [...headers, ['Last-Event-ID', lastEventId]];
+          return init;
+        }
+        (headers as Record<string, string>)['Last-Event-ID'] = lastEventId;
+      }
+      return init;
     } }),
     [apiKey, apiUrl],
   );
 
   const stop = useCallback(() => {
+    const activeThreadId = threadId ?? null;
+    const activeRunId = lastExecutionIdRef.current;
     abortRef.current?.abort();
     abortRef.current = null;
     setIsLoading(false);
-  }, []);
+    if (activeThreadId && activeRunId) {
+      client.runs
+        .cancel(activeThreadId, activeRunId, false)
+        .catch(() => undefined);
+    }
+  }, [client, threadId]);
 
-  const reset = useCallback((newThreadId?: string | null, initialMessages?: ChatKitAIMessage[]) => {
+  const loadConversationMessages = useCallback(
+    async (recordId: string) => {
+      if (!apiUrl || !apiKey) {
+        throw new Error('Missing API configuration');
+      }
+      try {
+        stop();
+      } catch {
+        // ignore stop errors from an already-idle stream
+      }
+      const response = await client.conversations.listMessages(recordId, {
+        limit: DEFAULT_HISTORY_LIMIT,
+        offset: 0,
+      });
+      const sorted = sortMessagesByCreatedAt(response.items ?? []);
+      const mapped = sorted.map(mapChatMessageToUiMessage);
+      setValues({ messages: mapped ?? [] });
+      return mapped as ChatKitAIMessage[];
+    },
+    [apiKey, apiUrl, client, stop],
+  );
+
+  const reset = useCallback((
+    newThreadId?: string | null,
+    initialMessages?: ChatKitAIMessage[],
+    options?: { suppressThreadChange?: boolean },
+  ) => {
     abortRef.current?.abort();
     abortRef.current = null;
     setIsLoading(false);
     setError(null);
     setValues({ messages: initialMessages ?? [] });
     lastExecutionIdRef.current = null;
+    lastEventIdRef.current = null;
     if (newThreadId !== undefined) {
+      if (options?.suppressThreadChange && newThreadId !== threadId) {
+        suppressThreadChangeRef.current = true;
+      }
       setThreadId(newThreadId);
     }
-  }, [setThreadId]);
+  }, [setThreadId, threadId]);
 
   const handleInterrupt = useCallback(
     async (data: unknown) => {
@@ -606,16 +730,167 @@ const StreamSession = ({
     },
     [isParentAvailable, sendCommand, setError],
   );
+  
+  const runStream = useCallback(async (
+    nextThreadId: string,
+    input?: TChatRequest | null,
+    options?: StreamSubmitOptions,
+  ) => {
+    const abortController = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = abortController;
+    setIsLoading(true);
+
+    try {
+      const stream = client.runs.stream(nextThreadId, assistantId, {
+        input: input ?? null,
+        context: options?.context,
+        config: options?.config,
+        checkpoint: options?.checkpoint ?? undefined,
+        streamMode: options?.streamMode,
+        streamSubgraphs: options?.streamSubgraphs,
+        streamResumable: options?.streamResumable,
+        signal: abortController.signal,
+        onDisconnect: 'continue'
+      });
+
+      const interrupts: unknown[] = []
+      for await (const chunk of stream) {
+        if (chunk?.id) {
+          lastEventIdRef.current = String(chunk.id);
+        }
+        applyStreamEvent(
+          chunk as StreamChunk,
+          setValues,
+          setError,
+          sendEvent,
+          interrupts,
+          (executionId) => {
+            if (executionId) {
+              lastExecutionIdRef.current = executionId;
+            }
+          },
+        );
+      }
+
+      if (interrupts.length > 0) {
+        for await (const interruptData of interrupts) {
+          await handleInterrupt(interruptData);
+        }
+      }
+    } catch (streamError) {
+      if (!(streamError instanceof DOMException && streamError.name === 'AbortError')) {
+        setError(streamError);
+      }
+    } finally {
+      if (abortRef.current === abortController) {
+        abortRef.current = null;
+      }
+      setIsLoading(false);
+    }
+  }, [assistantId, client, sendEvent, handleInterrupt]);
+
+  const loadThread = useCallback(
+    async (threadId: string) => {
+      if (!threadId) return;
+      setError(null);
+
+      try {
+        stop();
+      } catch {
+        // ignore stop errors from an already-idle stream
+      }
+
+      setThreadId(threadId);
+      lastEventIdRef.current = null;
+
+      const conversationResult = await client.conversations.search({
+        where: { threadId: threadId },
+        limit: 1,
+      });
+
+      const conversation = conversationResult.items?.[0];
+      if (!conversation?.id) {
+        setValues({ messages: [] });
+        return;
+      }
+
+      await loadConversationMessages(conversation.id);
+
+      const status = String(conversation.status ?? '').toLowerCase();
+      const shouldJoinStream = !status || status === 'running' || status === 'busy';
+      if (!shouldJoinStream) return;
+
+      const lastAiMessageResult = await client.conversations.searchMessages(
+        conversation.id,
+        {
+          where: { role: 'ai' },
+          order: { createdAt: 'DESC' },
+          limit: 1,
+        },
+      );
+      const runId = lastAiMessageResult.items?.[0]?.executionId ?? null;
+      if (!runId) return;
+      lastExecutionIdRef.current = runId;
+
+      await runStream(threadId, null, {});
+
+      // const abortController = new AbortController();
+      // abortRef.current?.abort();
+      // abortRef.current = abortController;
+      // setIsLoading(true);
+
+      // try {
+      //   const stream = client.runs.joinStream(threadId, runId, {
+      //     streamMode: lastStreamOptionsRef.current.streamMode,
+      //     signal: abortController.signal,
+      //   });
+
+      //   const interrupts: unknown[] = []
+      //   for await (const chunk of stream) {
+      //     if (chunk?.id) {
+      //       lastEventIdRef.current = String(chunk.id);
+      //     }
+      //     applyStreamEvent(
+      //       chunk as StreamChunk,
+      //       setValues,
+      //       setError,
+      //       sendEvent,
+      //       interrupts,
+      //       (executionId) => {
+      //         if (executionId) {
+      //           lastExecutionIdRef.current = executionId;
+      //         }
+      //       },
+      //     );
+      //   }
+      // } catch (streamError) {
+      //   if (!(
+      //       streamError instanceof DOMException &&
+      //       streamError.name === 'AbortError'
+      //     )) {
+      //     setError(streamError);
+      //   }
+      // } finally {
+      //   if (abortRef.current === abortController) {
+      //     abortRef.current = null;
+      //   }
+      //   setIsLoading(false);
+      // }
+    },
+    [client, runStream, stop, loadConversationMessages, setThreadId],
+  );
 
   const submit = useCallback(
     async (
       input?: TChatRequest | null,
       options?: StreamSubmitOptions,
     ) => {
-      if (isLoading) {
-        return;
-      }
+      // if (isLoading) {
+      //   return;
+      // }
       setError(null);
+      const previousThreadId = threadId ?? null;
       lastStreamOptionsRef.current = {
         streamMode: options?.streamMode,
         streamSubgraphs: options?.streamSubgraphs,
@@ -625,6 +900,7 @@ const StreamSession = ({
       if (shouldStartNewThread) {
         setValues({ messages: [] });
         lastExecutionIdRef.current = null;
+        lastEventIdRef.current = null;
       }
       const optimistic = options?.optimisticValues;
       if (optimistic) {
@@ -653,50 +929,60 @@ const StreamSession = ({
         nextThreadId = desiredThreadId;
         setThreadId(desiredThreadId);
       }
-
-      const abortController = new AbortController();
-      abortRef.current?.abort();
-      abortRef.current = abortController;
-      setIsLoading(true);
-
-      try {
-        const stream = client.runs.stream(nextThreadId, assistantId, {
-          input: input ?? null,
-          context: options?.context,
-          config: options?.config,
-          checkpoint: options?.checkpoint ?? undefined,
-          streamMode: options?.streamMode,
-          streamSubgraphs: options?.streamSubgraphs,
-          streamResumable: options?.streamResumable,
-          signal: abortController.signal,
-        });
-
-        for await (const chunk of stream) {
-          applyStreamEvent(
-            chunk as StreamChunk,
-            setValues,
-            setError,
-            sendEvent,
-            handleInterrupt,
-            (executionId) => {
-              if (executionId) {
-                lastExecutionIdRef.current = executionId;
-              }
-            },
-          );
-        }
-      } catch (streamError) {
-        if (!(streamError instanceof DOMException && streamError.name === 'AbortError')) {
-          setError(streamError);
-        }
-      } finally {
-        if (abortRef.current === abortController) {
-          abortRef.current = null;
-        }
-        setIsLoading(false);
+      if (nextThreadId !== previousThreadId) {
+        lastEventIdRef.current = null;
       }
+
+      await runStream(nextThreadId, input, options);
+
+      // const abortController = new AbortController();
+      // abortRef.current?.abort();
+      // abortRef.current = abortController;
+      // setIsLoading(true);
+
+      // try {
+      //   const stream = client.runs.stream(nextThreadId, assistantId, {
+      //     input: input ?? null,
+      //     context: options?.context,
+      //     config: options?.config,
+      //     checkpoint: options?.checkpoint ?? undefined,
+      //     streamMode: options?.streamMode,
+      //     streamSubgraphs: options?.streamSubgraphs,
+      //     streamResumable: options?.streamResumable,
+      //     signal: abortController.signal,
+      //     onDisconnect: 'continue'
+      //   });
+
+      //   const interrupts: unknown[] = []
+      //   for await (const chunk of stream) {
+      //     if (chunk?.id) {
+      //       lastEventIdRef.current = String(chunk.id);
+      //     }
+      //     applyStreamEvent(
+      //       chunk as StreamChunk,
+      //       setValues,
+      //       setError,
+      //       sendEvent,
+      //       interrupts,
+      //       (executionId) => {
+      //         if (executionId) {
+      //           lastExecutionIdRef.current = executionId;
+      //         }
+      //       },
+      //     );
+      //   }
+      // } catch (streamError) {
+      //   if (!(streamError instanceof DOMException && streamError.name === 'AbortError')) {
+      //     setError(streamError);
+      //   }
+      // } finally {
+      //   if (abortRef.current === abortController) {
+      //     abortRef.current = null;
+      //   }
+      //   setIsLoading(false);
+      // }
     },
-    [assistantId, client, handleInterrupt, isLoading, setThreadId, sendEvent, threadId],
+    [client, runStream, setThreadId, threadId],
   );
 
   submitRef.current = submit;
@@ -714,6 +1000,8 @@ const StreamSession = ({
     isLoading,
     isReady,
     error,
+    loadThread,
+    loadConversationMessages,
     submit,
     stop,
     reset,

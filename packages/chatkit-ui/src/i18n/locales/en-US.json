@@ -5,25 +5,25 @@
     "statusOnline": "Online",
     "missingConfigShort": "Missing ChatKit configuration.",
     "missingConfigDetail": "Missing ChatKit configuration. Check `VITE_XPERTAI_API_URL`, and the `clientSecret` prop.",
-    "loadingConversation": "Loading conversation...",
+    "loadingThread": "Loading thread...",
     "stop": "Stop",
     "send": "Send message",
     "retryUpload": "Retry upload",
     "poweredBy": "Powered by Xpert AI",
     "errors": {
-      "loadMessages": "Failed to load conversation messages",
-      "createConversation": "Failed to create conversation",
-      "deleteConversation": "Failed to delete conversation"
+      "loadMessages": "Failed to load thread messages",
+      "createThread": "Failed to create thread",
+      "deleteThread": "Failed to delete thread"
     }
   },
   "history": {
-    "conversationHistory": "Conversation history",
-    "title": "Conversations",
-    "newChat": "New Chat",
-    "empty": "No conversations yet",
-    "newConversationTitle": "New conversation",
-    "conversationWithId": "Conversation {{id}}",
-    "conversationFallback": "Conversation"
+    "threadHistory": "Thread history",
+    "title": "Threads",
+    "newThread": "New Thread",
+    "empty": "No threads yet",
+    "newThreadTitle": "New thread",
+    "threadWithId": "Thread {{id}}",
+    "threadFallback": "Thread"
   },
   "messageActions": {
     "copied": "Copied!",

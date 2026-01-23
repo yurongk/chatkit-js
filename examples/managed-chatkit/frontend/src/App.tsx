@@ -16,6 +16,7 @@ export default function App() {
   const frameUrl = (import.meta.env.VITE_CHATKIT_TARGET as string | undefined) ?? '';
 
   const setChatkit = useAppStore((state) => state.setChatkit);
+  const [threads, setThreads] = useState<string[]>([]);
 
   // ============================================================================
   // Playground config - copied from https://chatkit.studio/playground
@@ -120,6 +121,10 @@ export default function App() {
     onReady: () => {
       setChatkit(chatkit);
     },
+    onThreadChange: ({ threadId }) => {
+      if (!threadId) return;
+      setThreads((prev) => (prev.includes(threadId) ? prev : [...prev, threadId]));
+    },
     onEffect: ({name, data}) => {
       console.log(`Effect triggered: ${name}`, data);
     }
@@ -146,6 +151,30 @@ export default function App() {
           <div>
             <h1 className="text-2xl font-bold">{t('title')}</h1>
             <p className="text-sm text-gray-600 mt-1">{t('subtitle')}</p>
+          </div>
+          <div className="pt-4">
+            <strong>Threads:</strong>
+            <ul className="mt-2 text-xs list-disc list-inside">
+              {threads.length === 0 ? (
+                <li className="text-gray-500">(no threads yet)</li>
+              ) : (
+                threads.map((id) => (
+                  <li key={id} className="break-all">
+                    <button
+                      className="text-blue-600 hover:underline"
+                      onClick={() => {
+                        console.log('Switching to thread:', id);
+                        chatkit.setThreadId(id).catch((e) => {
+                          console.error('Failed to set thread id', e);
+                        });
+                      }}
+                    >
+                      {id}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
           </div>
           <label className="text-xs text-gray-600 flex flex-col gap-1 min-w-[140px]">
             <span className="font-medium">{t('labels.language')}</span>
@@ -180,11 +209,23 @@ export default function App() {
             </pre>
           </div>
 
-          <div>
+          <div className="space-x-2">
             <button className="mt-2 px-3 py-1 bg-red-500 text-white rounded"
               onClick={() => chatkit.sendUserMessage({ text: t('messages.helloWorld'), newThread: true })}
             >
               {t('buttons.triggerConversation')}
+            </button>
+
+            <button className="mt-2 px-3 py-1 bg-blue-500 text-white rounded"
+              onClick={() => chatkit.sendUserMessage({
+                text: 'Test with parameters',
+                newThread: true,
+                state: {
+                  the_name: 'Alice',
+                }
+              })}
+            >
+              📤 Send with Params
             </button>
           </div>
         </div>

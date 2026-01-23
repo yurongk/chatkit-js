@@ -418,6 +418,13 @@ export abstract class ChatKitElementBase<TRawOptions> extends HTMLElement {
     toolChoice?: ToolChoice
     model?: string
     newThread?: boolean
+    /** Trigger parameters from workflow trigger configuration */
+    trigger?: {
+      name?: string
+      params?: Record<string, any>
+    } | Record<string, any>
+    /** Custom state variables for workflow */
+    state?: Record<string, any>
   }) {
     await this.#loaded
     await this.#messenger?.commands.sendUserMessage(params)

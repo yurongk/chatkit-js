@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { FileText, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
 
-import type { ChatMessage, Message } from '@xpert-ai/xpert-sdk';
+import type { Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
 
 /**
@@ -42,7 +42,6 @@ import { AssistantMessage } from './thread/messages/ai';
 import { MessageActions } from './thread/MessageActions';
 import { StartScreen } from './thread/StartScreen';
 // Avatar import removed - AI avatar disabled
-import { ScrollArea } from './ui/scroll-area';
 import { useStreamManager } from '../hooks/useStream';
 import { useThreads } from '../hooks/useThreads';
 import { useChatkitTranslation } from '../i18n/useChatkitTranslation';
@@ -56,8 +55,6 @@ export type ChatProps = {
 };
 
 const defaultApiUrl = import.meta.env.VITE_XPERTAI_API_URL as string | undefined;
-const DEFAULT_HISTORY_LIMIT = 200;
-
 function createMessageId() {
   return (
     globalThis.crypto?.randomUUID?.() ??
@@ -94,36 +91,6 @@ function formatMessageContent(content: Message['content'][number]): string {
   return '';
 }
 
-function normalizeRoleToMessageType(role?: string): Message['type'] {
-  const normalized = (role ?? '').toLowerCase();
-  if (normalized === 'user' || normalized === 'human') return 'human';
-  if (normalized === 'assistant' || normalized === 'ai') return 'ai';
-  if (normalized === 'system') return 'system';
-  if (normalized === 'tool') return 'tool';
-  return 'ai';
-}
-
-function mapChatMessageToUiMessage(message: ChatMessage): Message {
-  return {
-    id: message.id ?? createMessageId(),
-    type: normalizeRoleToMessageType(message.role),
-    content: message.content ?? '',
-    ...(message.reasoning ? { reasoning: message.reasoning as any } : {}),
-    ...(message.executionId ? { executionId: message.executionId } : {}),
-  } as Message;
-}
-
-function sortMessagesByCreatedAt(items: ChatMessage[]): ChatMessage[] {
-  return [...items].sort((a, b) => {
-    const aTime = Date.parse(a.createdAt ?? '');
-    const bTime = Date.parse(b.createdAt ?? '');
-    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
-    if (Number.isNaN(aTime)) return -1;
-    if (Number.isNaN(bTime)) return 1;
-    return aTime - bTime;
-  });
-}
-
 export function Chat({
   className,
   options,
@@ -141,7 +108,6 @@ export function Chat({
   const {setStream} = useStreamManager();
   const stream = useStreamContext();
 
-  const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
   const [historyError, setHistoryError] = React.useState<string | null>(null);
   const [assistantName, setAssistantName] = React.useState<string | null>(null);
@@ -189,13 +155,12 @@ export function Chat({
   const [selectedTool, setSelectedTool] = React.useState<ToolOption | null>(null);
   const [attachments, setAttachments] = React.useState<UploadingFile[]>([]);
   const {
-    conversations,
-    createConversation,
-    deleteConversation,
-    refreshConversations,
+    threads,
+    createThread,
+    deleteThread,
+    refreshThreads,
     isLoading: isThreadsLoading,
   } = useThreads();
-  const scrollAreaRef = React.useRef<HTMLDivElement>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -212,8 +177,7 @@ export function Chat({
   const scrollToBottom = React.useCallback((smooth = false) => {
     // Use requestAnimationFrame to ensure DOM has updated
     requestAnimationFrame(() => {
-      // Find the actual Radix ScrollArea Viewport element
-      const viewport = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+      const viewport = viewportRef.current;
       if (viewport) {
         viewport.scrollTo({
           top: viewport.scrollHeight,
@@ -244,8 +208,8 @@ export function Chat({
 
   React.useEffect(() => {
     if (missingConfig) return;
-    void refreshConversations();
-  }, [missingConfig, refreshConversations]);
+    void refreshThreads();
+  }, [missingConfig, refreshThreads]);
 
   // Fetch assistant name from API
   React.useEffect(() => {
@@ -253,8 +217,8 @@ export function Chat({
     stream.client.assistants
       .get(stream.assistantId)
       .then((assistant) => {
-        if (assistant?.name) {
-          setAssistantName(assistant.name);
+        if (assistant) {
+          setAssistantName(assistant.metadata?.title as string || assistant.name);
         }
       })
       .catch((err) => {
@@ -451,7 +415,7 @@ export function Chat({
   };
 
   const loadConversationMessages = React.useCallback(
-    async (conversationId: string, threadId?: string | null) => {
+    async (recordId: string) => {
       if (missingConfig) {
         setHistoryError(t('chat.missingConfigShort'));
         return;
@@ -459,25 +423,13 @@ export function Chat({
       setHistoryError(null);
       setIsHistoryLoading(true);
       try {
-        stream.stop();
-      } catch {
-        // ignore stop errors from an already-idle stream
-      }
-      try {
-        const response = await stream.client.conversations.listMessages(conversationId, {
-          limit: DEFAULT_HISTORY_LIMIT,
-          offset: 0,
-        });
-        const sorted = sortMessagesByCreatedAt(response.items ?? []);
-        const mapped = sorted.map(mapChatMessageToUiMessage);
-        stream.reset(threadId ?? null, mapped as Message[]);
-        setActiveConversationId(conversationId);
+        await stream.loadConversationMessages(recordId);
+        // setActiveThreadId(threadId ?? null);
       } catch (err) {
-        console.warn('Failed to load conversation messages', err);
+        console.warn('Failed to load thread messages', err);
         setHistoryError(
           err instanceof Error ? err.message : t('chat.errors.loadMessages'),
         );
-        stream.reset(threadId ?? null, []);
       } finally {
         setIsHistoryLoading(false);
       }
@@ -485,65 +437,49 @@ export function Chat({
     [missingConfig, stream, t],
   );
 
-  React.useEffect(() => {
-    if (!stream.threadId) return;
-    if (isHistoryLoading) return;
-    const matched = conversations.find((item) => item.threadId === stream.threadId);
-    if (!matched) return;
-    if (activeConversationId && activeConversationId === matched.id) return;
-    if (messages.length > 0) {
-      setActiveConversationId(matched.id);
-      return;
-    }
-    // void loadConversationMessages(matched.id, matched.threadId ?? null);
-  }, [
-    conversations,
-    stream.threadId,
-    messages.length,
-    activeConversationId,
-    isHistoryLoading,
-    // loadConversationMessages,
-  ]);
-
-  const handleNewConversation = async () => {
-    if (missingConfig || stream.isLoading || isHistoryLoading) return;
+  const handleNewThread = async () => {
+    if (missingConfig || isHistoryLoading) return;
     setHistoryError(null);
     try {
-      const created = await createConversation({ title: t('history.newConversationTitle') });
-      setActiveConversationId(created.id);
-      stream.reset(created.threadId ?? null, []);
-      await refreshConversations();
+      // const created = await createThread({ title: t('history.newThreadTitle') });
+      // setActiveThreadId(created.id);
+      stream.reset(null, []);
+      // await refreshThreads();
     } catch (err) {
-      console.warn('Failed to create conversation', err);
+      console.warn('Failed to create thread', err);
       setHistoryError(
-        err instanceof Error ? err.message : t('chat.errors.createConversation'),
+        err instanceof Error ? err.message : t('chat.errors.createThread'),
       );
     }
   };
 
-  const handleSelectConversation = (id: string) => {
+  const handleSelectThread = (id: string) => {
     if (isHistoryLoading) return;
     setHistoryError(null);
-    const conversation = conversations.find((item) => item.id === id);
-    const nextThreadId = conversation?.threadId ?? null;
-    if (id === activeConversationId && stream.threadId === nextThreadId) return;
-    void loadConversationMessages(id, nextThreadId);
+    const thread = threads.find((item) => item.id === id);
+    if (!thread) return;
+    if (id === stream.threadId) return;
+    stream.reset(id, []);
+    if (thread.recordId) {
+      void loadConversationMessages(thread.recordId);
+    }
   };
 
-  const handleDeleteConversation = (id: string) => {
+  const handleDeleteThread = (id: string) => {
     setHistoryError(null);
-    void deleteConversation(id)
+    const thread = threads.find((item) => item.id === id);
+    if (!thread?.recordId) return;
+    void deleteThread(thread.recordId)
       .then(() => {
-        if (activeConversationId === id) {
+        if (stream.threadId === id) {
           stream.reset(null, []);
-          setActiveConversationId(null);
         }
-        return refreshConversations();
+        return refreshThreads();
       })
       .catch((err) => {
-        console.warn('Failed to delete conversation', err);
+        console.warn('Failed to delete thread', err);
         setHistoryError(
-          err instanceof Error ? err.message : t('chat.errors.deleteConversation'),
+          err instanceof Error ? err.message : t('chat.errors.deleteThread'),
         );
       });
   };
@@ -585,11 +521,11 @@ export function Chat({
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-col overflow-hidden bg-background shadow-sm',
+        'flex h-full w-full flex-col flex-1 overflow-y-auto bg-background shadow-sm',
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b bg-muted/30 px-6 py-2">
+      <div className="flex items-center justify-between border-b px-6 py-2 sticky top-0 z-10 bg-background">
         <div className="flex items-center gap-3">
           <div className="h-2 w-2 rounded-full bg-green-500"></div>
           <div>
@@ -600,181 +536,179 @@ export function Chat({
         {/* History controls - only shown when history.enabled is true (default) */}
         {(history?.enabled !== false) && (
           <div className="flex items-center gap-1">
-            {/* New conversation button */}
+            {/* New thread button */}
             <button
               type="button"
-              onClick={handleNewConversation}
-              disabled={missingConfig || stream.isLoading || isHistoryLoading}
+              onClick={handleNewThread}
+              disabled={missingConfig || isHistoryLoading}
               className={cn(
                 'flex h-8 w-8 cursor-pointer items-center justify-center rounded-md',
                 'text-muted-foreground hover:text-foreground hover:bg-muted',
                 'transition-colors duration-150',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
-              title={t('history.newConversation')}
+              title={t('history.newThread')}
             >
               <Pencil size={16} />
             </button>
             <HistorySidebar
-              conversations={conversations}
-              currentConversationId={activeConversationId ?? undefined}
-              onNewConversation={handleNewConversation}
-              onSelectConversation={handleSelectConversation}
-              onDeleteConversation={handleDeleteConversation}
+              threads={threads}
+              currentThreadId={stream.threadId ?? undefined}
+              onNewThread={handleNewThread}
+              onSelectThread={handleSelectThread}
+              onDeleteThread={handleDeleteThread}
               showDelete={history?.showDelete !== false}
-              disabled={missingConfig || stream.isLoading || isThreadsLoading || isHistoryLoading}
+              disabled={missingConfig || isThreadsLoading || isHistoryLoading}
             />
           </div>
         )}
       </div>
 
-      <ScrollArea ref={scrollAreaRef} className="flex-1">
-        <div ref={viewportRef} className="px-6 py-4">
-          {errorMessage && (
-            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {errorMessage}
-            </div>
-          )}
-          {historyError && (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {historyError}
-            </div>
-          )}
-          {missingConfig && (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {t('chat.missingConfigDetail')}
-            </div>
-          )}
-          {isHistoryLoading && (
-            <div className="mb-4 rounded-lg border border-muted px-3 py-2 text-sm text-muted-foreground">
-              {t('chat.loadingConversation')}
-            </div>
-          )}
-          {messages.length === 0 ? (
-            <StartScreen
-              startScreen={startScreen}
-              onPromptClick={handlePromptClick}
-            />
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message, index) => {
-                const messageType = String(message.type);
-                const isAssistantMessage =
-                  messageType === 'assistant' || messageType === 'ai';
+      <div ref={viewportRef} className="px-6 py-4">
+        {errorMessage && (
+          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {errorMessage}
+          </div>
+        )}
+        {historyError && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {historyError}
+          </div>
+        )}
+        {missingConfig && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {t('chat.missingConfigDetail')}
+          </div>
+        )}
+        {isHistoryLoading && (
+          <div className="mb-4 rounded-lg border border-muted px-3 py-2 text-sm text-muted-foreground">
+            {t('chat.loadingThread')}
+          </div>
+        )}
+        {messages.length === 0 ? (
+          <StartScreen
+            startScreen={startScreen}
+            onPromptClick={handlePromptClick}
+          />
+        ) : (
+          <div className="space-y-4">
+            {messages.map((message, index) => {
+              const messageType = String(message.type);
+              const isAssistantMessage =
+                messageType === 'assistant' || messageType === 'ai';
 
-                const messageContent =
-                  typeof message.content === 'string'
-                    ? message.content
-                    : Array.isArray(message.content)
-                      ? message.content.map((part) => formatMessageContent(part as any)).join('')
-                      : formatMessageContent(message.content);
+              const messageContent =
+                typeof message.content === 'string'
+                  ? message.content
+                  : Array.isArray(message.content)
+                    ? message.content.map((part) => formatMessageContent(part as any)).join('')
+                    : formatMessageContent(message.content);
 
-                return (
-                  <div
-                    key={message.id ?? `${message.type}-${index}`}
-                    className={cn(
-                      'group flex gap-3',
-                      message.type === 'human'
-                        ? 'justify-end'
-                        : 'justify-start -ml-1',  // AI messages: slightly closer to left
-                    )}
-                  >
-                    <div className="flex flex-col">
-                      <div
-                        className={cn(
-                          'max-w-full rounded-2xl',
-                          message.type === 'human'
-                            ? 'bg-primary text-primary-foreground px-4 py-2.5'
-                            : message.type === 'system'
-                              ? 'bg-muted text-muted-foreground text-xs px-4 py-2.5'
-                              : 'py-1 text-chat-foreground',  // AI messages: use chat-specific foreground color
-                        )}
-                      >
-                        {isAssistantMessage ? (
-                          <AssistantMessage
-                            message={{
-                              ...(message as ChatkitMessage),
-                              type: 'assistant',
-                            }}
-                            isStreaming={stream.isLoading && index === messages.length - 1}
-                          />
-                        ) : (
-                          <>
-                            {/* Show attachments for human messages */}
-                            {message.type === 'human' && (message as any).attachments?.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mb-2">
-                                {((message as any).attachments as Array<{ originalName: string; mimetype: string }>).map((file, fileIndex) => (
-                                  <div
-                                    key={fileIndex}
-                                    className="flex items-center gap-1.5 rounded-md bg-primary-foreground/20 px-2 py-1 text-xs"
-                                  >
-                                    <FileText size={12} />
-                                    <span className="max-w-[100px] truncate">{file.originalName}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {Array.isArray(message.content) ? (
-                              message.content.map((part, partIndex) => (
-                                <p
-                                  key={`${part.type}-${partIndex}`}
-                                  className="break-words text-sm leading-relaxed"
+              return (
+                <div
+                  key={message.id ?? `${message.type}-${index}`}
+                  className={cn(
+                    'group flex gap-3',
+                    message.type === 'human'
+                      ? 'justify-end'
+                      : 'justify-start -ml-1',  // AI messages: slightly closer to left
+                  )}
+                >
+                  <div className="flex flex-col overflow-hidden">
+                    <div
+                      className={cn(
+                        'max-w-full rounded-2xl',
+                        message.type === 'human'
+                          ? 'bg-primary text-primary-foreground px-4 py-2.5'
+                          : message.type === 'system'
+                            ? 'bg-muted text-muted-foreground text-xs px-4 py-2.5'
+                            : 'py-1 text-chat-foreground',  // AI messages: use chat-specific foreground color
+                      )}
+                    >
+                      {isAssistantMessage ? (
+                        <AssistantMessage
+                          message={{
+                            ...(message as ChatkitMessage),
+                            type: 'assistant',
+                          }}
+                          isStreaming={stream.isLoading && index === messages.length - 1}
+                        />
+                      ) : (
+                        <>
+                          {/* Show attachments for human messages */}
+                          {message.type === 'human' && (message as any).attachments?.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {((message as any).attachments as Array<{ originalName: string; mimetype: string }>).map((file, fileIndex) => (
+                                <div
+                                  key={fileIndex}
+                                  className="flex items-center gap-1.5 rounded-md bg-primary-foreground/20 px-2 py-1 text-xs"
                                 >
-                                  {formatMessageContent(part as any)}
-                                </p>
-                              ))
-                            ) : (
-                              <span className="break-words text-sm leading-relaxed">
-                                {formatMessageContent(message.content)}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                      {/* Message actions - hidden during streaming, retry only for last AI message */}
-                      <MessageActions
-                        content={messageContent}
-                        isAssistant={isAssistantMessage}
-                        isStreaming={stream.isLoading && index === messages.length - 1}
-                        onRetry={
-                          isAssistantMessage && !stream.isLoading && index === messages.length - 1
-                            ? () => handleRetry(index)
-                            : undefined
-                        }
-                      />
+                                  <FileText size={12} />
+                                  <span className="max-w-[100px] truncate">{file.originalName}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {Array.isArray(message.content) ? (
+                            message.content.map((part, partIndex) => (
+                              <p
+                                key={`${part.type}-${partIndex}`}
+                                className="break-words text-sm leading-relaxed"
+                              >
+                                {formatMessageContent(part as any)}
+                              </p>
+                            ))
+                          ) : (
+                            <span className="break-words text-sm leading-relaxed">
+                              {formatMessageContent(message.content)}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {/* Message actions - hidden during streaming, retry only for last AI message */}
+                    <MessageActions
+                      content={messageContent}
+                      isAssistant={isAssistantMessage}
+                      isStreaming={stream.isLoading && index === messages.length - 1}
+                      onRetry={
+                        isAssistantMessage && !stream.isLoading && index === messages.length - 1
+                          ? () => handleRetry(index)
+                          : undefined
+                      }
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            {/* Show loading indicator with minimum display time */}
+            {showLoadingDots && (() => {
+              const lastMessage = messages[messages.length - 1];
+              const lastMessageType = lastMessage ? String(lastMessage.type) : '';
+              const isLastMessageFromAI = lastMessageType === 'ai' || lastMessageType === 'assistant';
+              // Hide dots once AI has substantial content
+              const lastMsgContent = lastMessage?.content;
+              const hasSubstantialContent = isLastMessageFromAI &&
+                ((typeof lastMsgContent === 'string' && lastMsgContent.length > 10) ||
+                  (Array.isArray(lastMsgContent) && lastMsgContent.length > 0));
+              if (hasSubstantialContent) return null;
+              return (
+                <div className="flex justify-start gap-3 -ml-2">
+                  <div className="max-w-full rounded-2xl py-2.5">
+                    <div className="flex gap-1.5">
+                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]"></div>
+                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]"></div>
+                      <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60"></div>
                     </div>
                   </div>
-                );
-              })}
-              {/* Show loading indicator with minimum display time */}
-              {showLoadingDots && (() => {
-                const lastMessage = messages[messages.length - 1];
-                const lastMessageType = lastMessage ? String(lastMessage.type) : '';
-                const isLastMessageFromAI = lastMessageType === 'ai' || lastMessageType === 'assistant';
-                // Hide dots once AI has substantial content
-                const lastMsgContent = lastMessage?.content;
-                const hasSubstantialContent = isLastMessageFromAI &&
-                  ((typeof lastMsgContent === 'string' && lastMsgContent.length > 10) ||
-                   (Array.isArray(lastMsgContent) && lastMsgContent.length > 0));
-                if (hasSubstantialContent) return null;
-                return (
-                  <div className="flex justify-start gap-3 -ml-2">
-                    <div className="max-w-full rounded-2xl py-2.5">
-                      <div className="flex gap-1.5">
-                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.3s]"></div>
-                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60 [animation-delay:-0.15s]"></div>
-                        <div className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/60"></div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
 
-      <div className="border-t bg-muted/30 p-4">
+      <div className="p-2 sticky bottom-0 z-10 bg-background">
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
