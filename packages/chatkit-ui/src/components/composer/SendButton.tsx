@@ -1,5 +1,6 @@
 import { ArrowUp, Square } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn, getRoundedClass } from '../../lib/utils';
+import { useTheme } from '../../providers/Theme';
 
 export type SendButtonProps = {
   disabled?: boolean;
@@ -16,13 +17,18 @@ export function SendButton({
   stopLabel = 'Stop',
   sendLabel = 'Send',
 }: SendButtonProps) {
+  const { theme } = useTheme();
+
+  const roundedClass = getRoundedClass(theme.radius);
+
   if (isLoading) {
     return (
       <button
         type="button"
         onClick={onStop}
         className={cn(
-          'flex h-9 w-9 shrink-0 items-center justify-center rounded-full cursor-pointer',
+          'flex h-9 w-9 shrink-0 items-center justify-center cursor-pointer',
+          roundedClass,
           'bg-primary text-background',
           'transition-transform duration-150 ease-out',
           'hover:scale-105 active:scale-95'
@@ -39,7 +45,8 @@ export function SendButton({
       type="submit"
       disabled={disabled}
       className={cn(
-        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full cursor-pointer',
+        'flex h-9 w-9 shrink-0 items-center justify-center cursor-pointer',
+        roundedClass,
         'bg-primary text-background',
         'transition-all duration-150 ease-out',
         'hover:scale-105 active:scale-95',

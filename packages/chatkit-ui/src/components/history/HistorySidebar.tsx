@@ -66,7 +66,7 @@ export function HistorySidebar({
           disabled={disabled}
           className="h-8 w-8 cursor-pointer"
         >
-          <History size={18} />
+          <History size={16} />
           <span className="sr-only">{t('history.threadHistory')}</span>
         </Button>
       </SheetTrigger>
