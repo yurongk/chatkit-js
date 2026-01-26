@@ -11,22 +11,23 @@ import {
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react';
-import type { XpertComposerOption, XpertToolOption, XpertIcon } from '@xpert-ai/chatkit-types';
-import { cn } from '../../lib/utils';
+import type { ToolOption, ChatKitOptions, IconName } from '@xpert-ai/chatkit-types';
+import { cn, getRoundedClass } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { useChatkitTranslation } from '../../i18n/useChatkitTranslation';
+import { useTheme } from '../../providers/Theme';
 
 export type ComposerMenuProps = {
-  composer?: XpertComposerOption;
+  composer?: ChatKitOptions['composer'];
   onAttachmentClick?: () => void;
-  onToolSelect?: (tool: XpertToolOption) => void;
-  selectedTool?: XpertToolOption | null;
+  onToolSelect?: (tool: ToolOption) => void;
+  selectedTool?: ToolOption | null;
   disabled?: boolean;
 };
 
 // Icon mapping for XpertIcon types
-function getIconComponent(icon: XpertIcon): React.ReactNode {
+function getIconComponent(icon: IconName): React.ReactNode {
   const iconMap: Record<string, React.ReactNode> = {
     'plus': <Plus size={16} />,
     'document': <FileText size={16} />,
@@ -51,6 +52,9 @@ export function ComposerMenu({
 }: ComposerMenuProps) {
   const { t } = useChatkitTranslation();
   const [open, setOpen] = React.useState(false);
+  const { theme } = useTheme();
+  
+  const roundedClass = getRoundedClass(theme.radius);
 
   const attachmentsEnabled = composer?.attachments?.enabled ?? false;
   const tools = composer?.tools ?? [];
@@ -65,7 +69,7 @@ export function ComposerMenu({
     setOpen(false);
   };
 
-  const handleToolSelect = (tool: XpertToolOption) => {
+  const handleToolSelect = (tool: ToolOption) => {
     onToolSelect?.(tool);
     setOpen(false);
   };
@@ -79,7 +83,7 @@ export function ComposerMenu({
           size="icon"
           disabled={disabled}
           className={cn(
-            "h-10 w-10 shrink-0 rounded-full hover:bg-muted",
+            "h-10 w-10 shrink-0 hover:bg-muted", roundedClass,
             open && "bg-muted"
           )}
         >
@@ -90,7 +94,7 @@ export function ComposerMenu({
       <PopoverContent
         align="start"
         side="top"
-        className="w-56 p-1"
+        className={cn("w-56 p-1", roundedClass)}
       >
         <div className="flex flex-col">
           {/* Attachments - always on top */}
@@ -99,7 +103,7 @@ export function ComposerMenu({
               <button
                 type="button"
                 onClick={handleAttachmentClick}
-                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors"
+                className={cn("flex items-center gap-3 px-3 py-2 text-sm hover:bg-muted transition-colors", roundedClass)}
               >
                 <span className="flex h-6 w-6 items-center justify-center text-muted-foreground">
                   <Paperclip size={16} />
@@ -119,7 +123,8 @@ export function ComposerMenu({
               type="button"
               onClick={() => handleToolSelect(tool)}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors",
+                "flex items-center gap-3 px-3 py-2 text-sm hover:bg-muted transition-colors",
+                roundedClass,
                 selectedTool?.id === tool.id && "bg-muted"
               )}
             >

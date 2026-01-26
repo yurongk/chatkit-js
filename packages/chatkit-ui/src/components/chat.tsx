@@ -4,36 +4,8 @@ import { FileText, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
 import type { Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
 
-/**
- * Represents a file stored on the server.
- * Returned by the file upload API.
- */
-interface StorageFile {
-  id: string;
-  file: string;
-  url?: string;
-  originalName?: string;
-  size?: number;
-  mimetype?: string;
-}
-
-/**
- * Represents a file being uploaded or already uploaded.
- */
-type UploadingFile = {
-  /** Local unique ID for tracking */
-  localId: string;
-  /** Original File object */
-  file: File;
-  /** Upload status */
-  status: 'uploading' | 'success' | 'error';
-  /** Server-side file info after successful upload */
-  storageFile?: StorageFile;
-  /** Error message if upload failed */
-  error?: string;
-};
-
 import { cn } from '../lib/utils';
+import { type StorageFile, type UploadingFile } from '../lib/types';
 import { useStreamContext } from '../providers/Stream';
 import { ComposerMenu } from './composer/ComposerMenu';
 import { SendButton } from './composer/SendButton';
@@ -519,7 +491,7 @@ export function Chat({
     stream.error instanceof Error ? stream.error.message : undefined;
 
   return (
-    <div
+    <div ref={viewportRef}
       className={cn(
         'flex h-full w-full flex-col flex-1 overflow-y-auto bg-background shadow-sm',
         className,
@@ -564,7 +536,7 @@ export function Chat({
         )}
       </div>
 
-      <div ref={viewportRef} className="px-6 py-4">
+      <div className="flex-1 px-6 py-4">
         {errorMessage && (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {errorMessage}
@@ -743,7 +715,7 @@ export function Chat({
 
                 {/* File name */}
                 <span className={cn(
-                  "max-w-[120px] truncate",
+                  "max-w-30 truncate",
                   item.status === 'error' && 'text-destructive'
                 )}>
                   {item.file.name}
@@ -799,7 +771,7 @@ export function Chat({
           {/* Capsule-shaped input container */}
           <div
             className={cn(
-              'flex flex-1 items-center gap-1 rounded-full',
+              'flex flex-1 items-center gap-1 rounded-xl',
               'bg-background border border-border shadow-sm',
               'pl-1.5 pr-1.5 py-1',
               'focus-within:border-muted-foreground/30 focus-within:shadow-md',
