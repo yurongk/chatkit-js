@@ -195,10 +195,10 @@ importers:
   packages/chatkit-js:
     dependencies:
       '@xpert-ai/chatkit-types':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit
       '@xpert-ai/chatkit-web-component':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../web-component
     devDependencies:
       typescript:
@@ -214,10 +214,10 @@ importers:
   packages/chatkit-react:
     dependencies:
       '@xpert-ai/chatkit-types':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit
       '@xpert-ai/chatkit-web-component':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../web-component
       react:
         specifier: '>=18'
@@ -275,13 +275,13 @@ importers:
         specifier: ^4.1.17
         version: 4.1.18(vite@7.3.0(@types/node@20.19.27)(jiti@2.6.1)(lightningcss@1.30.2))
       '@xpert-ai/a2ui-react':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit-widgets
       '@xpert-ai/chatkit-types':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit
       '@xpert-ai/chatkit-web-shared':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit-web-shared
       '@xpert-ai/xpert-sdk':
         specifier: ^0.0.2
@@ -387,10 +387,10 @@ importers:
   packages/chatkit-ui5:
     dependencies:
       '@xpert-ai/chatkit-types':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit
       '@xpert-ai/chatkit-web-component':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../web-component
     devDependencies:
       '@openui5/sap.ui.core':
@@ -412,10 +412,10 @@ importers:
   packages/chatkit-vue:
     dependencies:
       '@xpert-ai/chatkit-types':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit
       '@xpert-ai/chatkit-web-component':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../web-component
       vue:
         specifier: ^3.4.0
@@ -506,10 +506,10 @@ importers:
   packages/web-component:
     dependencies:
       '@xpert-ai/chatkit-types':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit
       '@xpert-ai/chatkit-web-shared':
-        specifier: workspace:*
+        specifier: workspace:~
         version: link:../chatkit-web-shared
     devDependencies:
       typescript:

@@ -18,7 +18,7 @@ import {
 } from '@xpert-ai/xpert-sdk';
 import type { Message } from '@langchain/core/messages';
 import { type ToolCall } from '@langchain/core/messages/tool';
-import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent } from '@xpert-ai/chatkit-types';
+import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent, type ChatEventEnvelope } from '@xpert-ai/chatkit-types';
 import { appendMessageContent } from '../lib/message';
 import { useParentMessenger } from '../hooks/useParentMessenger';
 import type { ParentMessenger } from './ParentMessenger';
@@ -85,19 +85,19 @@ function applyOptimisticValues(
   return { ...prev, ...update };
 }
 
-function parseEventData(raw: unknown) {
+function parseEventData(raw: string): ChatEventEnvelope | null {
   if (typeof raw === 'string') {
     if (!raw || raw.startsWith(':')) return null;
     try {
-      return JSON.parse(raw);
+      return JSON.parse(raw) as ChatEventEnvelope;
     } catch {
-      return raw;
+      return raw as unknown as ChatEventEnvelope;
     }
   }
-  return raw;
+  return raw as ChatEventEnvelope;
 }
 
-type StreamChunk = { id?: string; event: string; data: unknown };
+type StreamChunk = { id?: string; event: string; data: string };
 
 function createMessageId() {
   return (
@@ -389,6 +389,9 @@ function normalizeToolMessagesResponse(response: unknown): ClientToolMessageInpu
   return null
 }
 
+/**
+ * Process each stream event chunk
+ */
 function applyStreamEvent(
   chunk: StreamChunk,
   setValues: React.Dispatch<React.SetStateAction<StateType>>,
@@ -430,11 +433,7 @@ function applyStreamEvent(
 
   if (typeof parsed !== 'object' || parsed == null) return;
 
-  const payload = parsed as {
-    type: ChatMessageTypeEnum;
-    event?: ChatMessageEventTypeEnum;
-    data?: unknown;
-  };
+  const payload = parsed
 
   const payloadType: ChatMessageTypeEnum = payload.type
 
@@ -834,49 +833,6 @@ const StreamSession = ({
       lastExecutionIdRef.current = runId;
 
       await runStream(threadId, null, {});
-
-      // const abortController = new AbortController();
-      // abortRef.current?.abort();
-      // abortRef.current = abortController;
-      // setIsLoading(true);
-
-      // try {
-      //   const stream = client.runs.joinStream(threadId, runId, {
-      //     streamMode: lastStreamOptionsRef.current.streamMode,
-      //     signal: abortController.signal,
-      //   });
-
-      //   const interrupts: unknown[] = []
-      //   for await (const chunk of stream) {
-      //     if (chunk?.id) {
-      //       lastEventIdRef.current = String(chunk.id);
-      //     }
-      //     applyStreamEvent(
-      //       chunk as StreamChunk,
-      //       setValues,
-      //       setError,
-      //       sendEvent,
-      //       interrupts,
-      //       (executionId) => {
-      //         if (executionId) {
-      //           lastExecutionIdRef.current = executionId;
-      //         }
-      //       },
-      //     );
-      //   }
-      // } catch (streamError) {
-      //   if (!(
-      //       streamError instanceof DOMException &&
-      //       streamError.name === 'AbortError'
-      //     )) {
-      //     setError(streamError);
-      //   }
-      // } finally {
-      //   if (abortRef.current === abortController) {
-      //     abortRef.current = null;
-      //   }
-      //   setIsLoading(false);
-      // }
     },
     [client, runStream, stop, loadConversationMessages, setThreadId],
   );
@@ -934,53 +890,6 @@ const StreamSession = ({
       }
 
       await runStream(nextThreadId, input, options);
-
-      // const abortController = new AbortController();
-      // abortRef.current?.abort();
-      // abortRef.current = abortController;
-      // setIsLoading(true);
-
-      // try {
-      //   const stream = client.runs.stream(nextThreadId, assistantId, {
-      //     input: input ?? null,
-      //     context: options?.context,
-      //     config: options?.config,
-      //     checkpoint: options?.checkpoint ?? undefined,
-      //     streamMode: options?.streamMode,
-      //     streamSubgraphs: options?.streamSubgraphs,
-      //     streamResumable: options?.streamResumable,
-      //     signal: abortController.signal,
-      //     onDisconnect: 'continue'
-      //   });
-
-      //   const interrupts: unknown[] = []
-      //   for await (const chunk of stream) {
-      //     if (chunk?.id) {
-      //       lastEventIdRef.current = String(chunk.id);
-      //     }
-      //     applyStreamEvent(
-      //       chunk as StreamChunk,
-      //       setValues,
-      //       setError,
-      //       sendEvent,
-      //       interrupts,
-      //       (executionId) => {
-      //         if (executionId) {
-      //           lastExecutionIdRef.current = executionId;
-      //         }
-      //       },
-      //     );
-      //   }
-      // } catch (streamError) {
-      //   if (!(streamError instanceof DOMException && streamError.name === 'AbortError')) {
-      //     setError(streamError);
-      //   }
-      // } finally {
-      //   if (abortRef.current === abortController) {
-      //     abortRef.current = null;
-      //   }
-      //   setIsLoading(false);
-      // }
     },
     [client, runStream, setThreadId, threadId],
   );

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { STATE_VARIABLE_HUMAN, type ChatKitOptions, type SendUserMessageParams } from "@xpert-ai/chatkit-types";
+import type { Capability } from "@xpert-ai/chatkit-web-shared";
 import { useStreamManager } from "../hooks/useStream";
 
 type CommandMessageMap = {
@@ -30,15 +31,11 @@ type ParentResponseMessage = {
 
 type ParentEventMessage = {
   type: "event";
-  event: string;
-  data: unknown;
+  event: 'public_event';
+  data: [Capability.Event, unknown];
 };
 
-type ParentMessage = ParentCommandMessage | ParentResponseMessage | ParentEventMessage | {
-  type: 'public_event'
-  event: string;
-  data: unknown;
-}
+type ParentMessage = ParentCommandMessage | ParentResponseMessage | ParentEventMessage
 
 type ParentEnvelope = Partial<ParentMessage> & { __xpaiChatKit: true };
 
@@ -68,7 +65,7 @@ export type ParentMessenger = {
       data?: CommandMessageMap[C],
       transfer?: Transferable[],
     ) => Promise<unknown>;
-  sendEvent: (event: string, data?: [string, unknown], transfer?: Transferable[]) => void;
+  sendEvent: (event: 'public_event', data?: [Capability.Event, unknown], transfer?: Transferable[]) => void;
 };
 
 type OnSetOptionsHandler = (options: ChatKitOptions | null) => void;
@@ -113,8 +110,6 @@ export function ParentMessengerProvider({
 
   useEffect(() => {
     if (!isParentAvailable) return;
-
-    console.log(`ParentMessenger initialized, parentOrigin ...`);
 
     const sendResponse = (nonce: string, response?: unknown, error?: unknown) => {
       const message: ParentEnvelope = {
@@ -249,7 +244,7 @@ export function ParentMessengerProvider({
   );
 
   const sendEvent = useCallback(
-    (event: string, data?: [string, unknown], transfer?: Transferable[]) => {
+    (event: 'public_event', data?: [Capability.Event, unknown], transfer?: Transferable[]) => {
       if (!isParentAvailable) return;
       const message: ParentEnvelope = {
         __xpaiChatKit: true,
