@@ -221,7 +221,7 @@ export type TChatEventMessage = {
 
 export interface ChatkitMessage {
   status?: string
-  content: TMessageItems
+  content: TMessageItems | string
   reasoning?: TMessageContentReasoning[]
   type: 'user' | 'assistant' | 'system' | 'tool' | 'event'
   id: string

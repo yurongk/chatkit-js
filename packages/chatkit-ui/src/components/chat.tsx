@@ -497,7 +497,7 @@ export function Chat({
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b px-6 py-2 sticky top-0 z-10 bg-background">
+      <div className="flex items-center justify-between border-b px-4 py-2 sticky top-0 z-10 bg-background">
         <div className="flex items-center gap-3">
           <div className="h-2 w-2 rounded-full bg-green-500"></div>
           <div>
@@ -793,7 +793,7 @@ export function Chat({
               placeholder={inputPlaceholder}
               disabled={stream.isLoading || missingConfig || isHistoryLoading}
               className={cn(
-                'flex-1 bg-transparent text-sm text-foreground outline-none px-2',
+                'flex-1 bg-transparent text-sm text-foreground outline-none pr-2',
                 'placeholder:text-muted-foreground',
                 'disabled:cursor-not-allowed disabled:opacity-50'
               )}

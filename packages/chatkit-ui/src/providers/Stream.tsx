@@ -18,7 +18,7 @@ import {
 } from '@xpert-ai/xpert-sdk';
 import type { Message } from '@langchain/core/messages';
 import { type ToolCall } from '@langchain/core/messages/tool';
-import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent, type ChatEventEnvelope } from '@xpert-ai/chatkit-types';
+import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent, type ChatEventEnvelope, type TMessageContentComplex, type TMessageContentComponent } from '@xpert-ai/chatkit-types';
 import { appendMessageContent } from '../lib/message';
 import { useParentMessenger } from '../hooks/useParentMessenger';
 import type { ParentMessenger } from './ParentMessenger';
@@ -32,7 +32,6 @@ export type StreamSubmitOptions = {
     | Partial<StateType>
     | ((prev: StateType) => Partial<StateType>);
   context?: Record<string, unknown>;
-  // command?: Command;
   config?: Config;
   checkpoint?: Omit<Checkpoint, 'thread_id'> | null;
   streamMode?: StreamMode | StreamMode[];
@@ -40,6 +39,7 @@ export type StreamSubmitOptions = {
   streamResumable?: boolean;
   threadId?: string;
   newThread?: boolean;
+  joinExistingThread?: boolean;
 };
 
 export type StreamContextType = {
@@ -317,9 +317,12 @@ function applyMessageData(
   }
 }
 
+/**
+ * Append a complex message content (e.g., with components) into the latest message
+ */
 function appendMessageComponent(
   setValues: React.Dispatch<React.SetStateAction<StateType>>,
-  content: TMessageContent) {
+  content: TMessageContentComplex) {
   updateLatestMessage(setValues, (lastM) => {
       // Deep clone the message to avoid mutation issues with React Strict Mode
       // React Strict Mode calls state updater twice, and appendMessageContent mutates the content array
@@ -433,7 +436,7 @@ function applyStreamEvent(
 
   if (typeof parsed !== 'object' || parsed == null) return;
 
-  const payload = parsed
+  const payload = parsed as ChatEventEnvelope<TMessageContentComponent<any>>
 
   const payloadType: ChatMessageTypeEnum = payload.type
 
@@ -442,7 +445,12 @@ function applyStreamEvent(
       appendStreamTextToLatest(setValues, payload.data);
       return;
     }
-    appendMessageComponent(setValues, payload.data as TMessageContent);
+
+    const message = payload.data
+    if (message.type === 'component') {
+      sendEvent('public_event', ['log', {name: 'component', data: message.data}]);
+    }
+    appendMessageComponent(setValues, message);
     return;
   }
 
@@ -522,19 +530,10 @@ function applyStreamEvent(
       }
       case ChatMessageEventTypeEnum.ON_INTERRUPT: {
         interrupts.push(payload.data);
-        // if (onInterrupt) {
-        //   const maybePromise = onInterrupt(payload.data);
-        //   if (
-        //     maybePromise &&
-        //     typeof (maybePromise as Promise<void>).catch === 'function'
-        //   ) {
-        //     (maybePromise as Promise<void>).catch(setError);
-        //   }
-        // }
         break;
       }
       case ChatMessageEventTypeEnum.ON_CLIENT_EFFECT: {
-        const toolCall = payload.data as ToolCall;
+        const toolCall = payload.data as unknown as ToolCall;
         sendEvent('public_event', ['effect', {name: toolCall.name, data: toolCall.args}]);
         break
       }
@@ -734,24 +733,25 @@ const StreamSession = ({
     nextThreadId: string,
     input?: TChatRequest | null,
     options?: StreamSubmitOptions,
+    runId?: string,
   ) => {
     const abortController = new AbortController();
     abortRef.current?.abort();
     abortRef.current = abortController;
     setIsLoading(true);
-
     try {
-      const stream = client.runs.stream(nextThreadId, assistantId, {
-        input: input ?? null,
-        context: options?.context,
-        config: options?.config,
-        checkpoint: options?.checkpoint ?? undefined,
-        streamMode: options?.streamMode,
-        streamSubgraphs: options?.streamSubgraphs,
-        streamResumable: options?.streamResumable,
-        signal: abortController.signal,
-        onDisconnect: 'continue'
-      });
+      const stream = options?.joinExistingThread ? client.runs.joinStream(nextThreadId, runId) :
+        client.runs.stream(nextThreadId, assistantId, {
+          input: input ?? null,
+          context: options?.context,
+          config: options?.config,
+          checkpoint: options?.checkpoint ?? undefined,
+          streamMode: options?.streamMode,
+          streamSubgraphs: options?.streamSubgraphs,
+          streamResumable: options?.streamResumable,
+          signal: abortController.signal,
+          onDisconnect: 'continue'
+        });
 
       const interrupts: unknown[] = []
       for await (const chunk of stream) {
@@ -832,7 +832,7 @@ const StreamSession = ({
       if (!runId) return;
       lastExecutionIdRef.current = runId;
 
-      await runStream(threadId, null, {});
+      await runStream(threadId, null, {joinExistingThread: true}, runId);
     },
     [client, runStream, stop, loadConversationMessages, setThreadId],
   );

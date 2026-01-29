@@ -136,7 +136,7 @@ function MemoryBlock({ content }: { content: TMessageContentMemory }) {
   );
 }
 
-function ComponentBlock({ content }: { content: TMessageContentComponent<{title: string; status: string; message: string; output: string; data: unknown; input: string}> }) {
+function ComponentBlock({ content }: { content: TMessageContentComponent<{title?: string; status?: string; message?: string; output?: string; data: unknown; input?: string}> }) {
   const [isExpanded, setIsExpanded] = React.useState(false);
   
   const data = content.data ?? {}
@@ -178,6 +178,9 @@ function ComponentBlock({ content }: { content: TMessageContentComponent<{title:
       </CardHeader>
       {isExpanded && (
         <CardContent className="text-xs text-muted-foreground max-h-60 overflow-auto">
+          {data.input && (
+            <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(data.input, null, 2)}</pre>
+          )}
           <pre className="whitespace-pre-wrap wrap-break-word">{fallback}</pre>
         </CardContent>
       )}
