@@ -413,15 +413,16 @@ export function ThemeProvider({ children, theme: themeProp }: ThemeProviderProps
 
       // Accent color with level adjustment
       if (color.accent?.primary) {
-        const level = color.accent.level ?? 2; // Default to level 2 (no adjustment)
-        const { primary, ring } = adjustAccentByLevel(color.accent.primary, level);
+        // const level = color.accent.level ?? 2; // Default to level 2 (no adjustment)
+        // const { primary, ring } = adjustAccentByLevel(color.accent.primary, level);
+        const primary = color.accent?.primary
 
         el.style.setProperty('--primary', primary);
         el.style.setProperty('--accent', primary);
-        el.style.setProperty('--ring', ring);
+        // el.style.setProperty('--ring', ring);
         root.style.setProperty('--primary', primary);
         root.style.setProperty('--accent', primary);
-        root.style.setProperty('--ring', ring);
+        // root.style.setProperty('--ring', ring);
 
         // Calculate and set primary-foreground based on luminance
         const primaryLuminance = getLuminance(color.accent.primary);
