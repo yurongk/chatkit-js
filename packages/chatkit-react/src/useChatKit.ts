@@ -26,7 +26,7 @@ export type ToEventHandlerKey<K extends keyof ChatKitEvents> =
   DotToCamelCase<K> extends `chatkit${infer EventName}`
     ? `on${Capitalize<EventName>}`
     : never;
-type ChatKitEventHandlers = Partial<{
+export type ChatKitEventHandlers = Partial<{
   [K in keyof ChatKitEvents as ToEventHandlerKey<K>]: ChatKitEvents[K] extends CustomEvent<
     infer Detail
   >
