@@ -22,6 +22,12 @@ import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageIn
 import { appendMessageContent } from '../lib/message';
 import { useParentMessenger } from '../hooks/useParentMessenger';
 import type { ParentMessenger } from './ParentMessenger';
+import {
+  createLangGraphEventState,
+  mapLangGraphEventToChatKit,
+  type LangGraphEventContext,
+  type LangGraphEventState,
+} from './langGraphEventMapper';
 
 type ChatKitAIMessage = Message & { executionId?: string };
 
@@ -401,6 +407,8 @@ function applyStreamEvent(
   setError: React.Dispatch<React.SetStateAction<unknown>>,
   sendEvent: ParentMessenger['sendEvent'],
   interrupts: unknown[],
+  langGraphEventState: LangGraphEventState,
+  eventContext?: LangGraphEventContext,
   onExecutionId?: (executionId: string | undefined) => void,
 ) {
   const parsed = parseEventData(chunk.data);
@@ -458,6 +466,18 @@ function applyStreamEvent(
     const eventType =
       (typeof payload.event === 'string' ? payload.event.toLowerCase() : '') as ChatMessageEventTypeEnum;
     const meta = extractMessageMeta(payload.data);
+    const executionId = extractExecutionId(payload.data);
+
+    mapLangGraphEventToChatKit({
+      eventType,
+      data: payload.data,
+      tags: payload.tags,
+      messageType: typeof meta.type === 'string' ? meta.type : undefined,
+      executionId,
+      sendEvent,
+      state: langGraphEventState,
+      context: eventContext,
+    });
 
     switch (eventType) {
       case ChatMessageEventTypeEnum.ON_CONVERSATION_START:
@@ -469,7 +489,6 @@ function applyStreamEvent(
         break;
       }
       case ChatMessageEventTypeEnum.ON_MESSAGE_START: {
-        const executionId = extractExecutionId(payload.data);
         if (executionId) {
           onExecutionId?.(executionId);
         }
@@ -753,7 +772,12 @@ const StreamSession = ({
           onDisconnect: 'continue'
         });
 
-      const interrupts: unknown[] = []
+      const interrupts: unknown[] = [];
+      const langGraphEventState = createLangGraphEventState();
+      const eventContext: LangGraphEventContext = {
+        threadId: nextThreadId,
+        input,
+      };
       for await (const chunk of stream) {
         if (chunk?.id) {
           lastEventIdRef.current = String(chunk.id);
@@ -764,6 +788,8 @@ const StreamSession = ({
           setError,
           sendEvent,
           interrupts,
+          langGraphEventState,
+          eventContext,
           (executionId) => {
             if (executionId) {
               lastExecutionIdRef.current = executionId;
