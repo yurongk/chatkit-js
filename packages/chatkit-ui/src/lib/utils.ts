@@ -19,3 +19,10 @@ export function getRoundedClass(themeRadius: string | undefined) {
       return 'rounded-full'; // Default to full circle
   }
 };
+
+export function createMessageId() {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  );
+}

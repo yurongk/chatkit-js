@@ -28,6 +28,7 @@ import {
   type LangGraphEventContext,
   type LangGraphEventState,
 } from './langGraphEventMapper';
+import { createMessageId } from '../lib/utils';
 
 type ChatKitAIMessage = Message & { executionId?: string };
 
@@ -104,13 +105,6 @@ function parseEventData(raw: string): ChatEventEnvelope | null {
 }
 
 type StreamChunk = { id?: string; event: string; data: string };
-
-function createMessageId() {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  );
-}
 
 function normalizeRoleToMessageType(role?: string): Message['type'] {
   const normalized = (role ?? '').toLowerCase();
