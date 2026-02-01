@@ -4,7 +4,7 @@ import { FileText, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
 import type { Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
 
-import { cn } from '../lib/utils';
+import { cn, createMessageId } from '../lib/utils';
 import { type StorageFile, type UploadingFile } from '../lib/types';
 import { useStreamContext } from '../providers/Stream';
 import { ComposerMenu } from './composer/ComposerMenu';
@@ -27,12 +27,6 @@ export type ChatProps = {
 };
 
 const defaultApiUrl = import.meta.env.VITE_XPERTAI_API_URL as string | undefined;
-function createMessageId() {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  );
-}
 
 function formatMessageContent(content: Message['content'][number]): string {
   if (typeof content === 'string') {

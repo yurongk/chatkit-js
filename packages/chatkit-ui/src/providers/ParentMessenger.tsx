@@ -1,7 +1,9 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { STATE_VARIABLE_HUMAN, type ChatKitOptions, type SendUserMessageParams } from "@xpert-ai/chatkit-types";
 import type { Capability } from "@xpert-ai/chatkit-web-shared";
+import type { Message } from '@xpert-ai/xpert-sdk';
 import { useStreamManager } from "../hooks/useStream";
+import { createMessageId } from "../lib/utils";
 
 type CommandMessageMap = {
   onSendUserMessage: SendUserMessageParams
@@ -146,21 +148,33 @@ export function ParentMessengerProvider({
         }
 
         const params = payload.data as SendUserMessageParams
+        const prompt = (params.text ?? params.state?.[STATE_VARIABLE_HUMAN]?.input ?? '').trim();
+        const newMessage: Message = {
+            id: createMessageId(),
+            type: 'human',
+            content: prompt,
+          };
 
         streamRef.current?.submit({
-          input: {
-            input: params.text,
-          },
-          state: {
-            ...(params.state || {}),
-            [STATE_VARIABLE_HUMAN]: {
-              ...(params.state?.[STATE_VARIABLE_HUMAN] || {}),
-              input: params.text ?? params.state?.[STATE_VARIABLE_HUMAN]?.input,
+            input: {
+              input: prompt,
+            },
+            state: {
+              ...(params.state || {}),
+              [STATE_VARIABLE_HUMAN]: {
+                ...(params.state?.[STATE_VARIABLE_HUMAN] || {}),
+                input: prompt,
+              },
+            }
+          }
+          ,{
+            newThread: params.newThread,
+            optimisticValues: (prev) => {
+              const prevMessages = prev?.messages ?? [];
+              return { ...prev, messages: [...prevMessages, newMessage] };
             },
           }
-        }, {
-          newThread: params.newThread,
-        });
+        );
         if (payload.nonce) {
           sendResponse(payload.nonce, { ok: true });
         }
