@@ -450,7 +450,7 @@ function applyStreamEvent(
 
     const message = payload.data
     if (message.type === 'component') {
-      sendEvent('public_event', ['log', {name: 'component', data: message.data}]);
+      sendEvent('public_event', ['log', {...message, name: 'component'}]);
     }
     appendMessageComponent(setValues, message);
     return;
