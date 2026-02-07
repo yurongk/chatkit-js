@@ -10,7 +10,7 @@ type CommandMessageMap = {
   onSetOptions: ChatKitOptions | null;
   onSetThreadId: { threadId: string | null };
   onClientToolCall: unknown;
-  onGetClientSecret: unknown;
+  onGetClientSecret: string | null;
   onWidgetAction: {
     action: string;
     widgetItem: unknown;

@@ -53,6 +53,7 @@ export type StreamContextType = {
   client: Client<StateType>;
   apiUrl: string;
   assistantId: string;
+  apiKey: string;
   threadId: string | null;
   values: StateType;
   messages: ChatKitAIMessage[];
@@ -81,6 +82,21 @@ const defaultApiUrl =
   'https://api.mtda.cloud/api/ai';
 
 const DEFAULT_HISTORY_LIMIT = 200;
+
+function withClientSecretHeaders(
+  headers: HeadersInit | undefined,
+  clientSecret: string,
+): Headers {
+  const nextHeaders = new Headers(headers);
+  if (clientSecret) {
+    nextHeaders.set('Authorization', `Bearer ${clientSecret}`);
+    nextHeaders.set('x-api-key', clientSecret);
+  } else {
+    nextHeaders.delete('Authorization');
+    nextHeaders.delete('x-api-key');
+  }
+  return nextHeaders;
+}
 
 function applyOptimisticValues(
   prev: StateType,
@@ -582,8 +598,11 @@ const StreamSession = ({
   const [values, setValues] = useState<StateType>({ messages: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [runtimeClientSecret, setRuntimeClientSecret] = useState(apiKey);
   const abortRef = useRef<AbortController | null>(null);
   const submitRef = useRef<StreamContextType['submit'] | null>(null);
+  const runtimeClientSecretRef = useRef(apiKey);
+  const refreshClientSecretPromiseRef = useRef<Promise<string> | null>(null);
   const lastStreamOptionsRef = useRef<
     Pick<StreamSubmitOptions, 'streamMode' | 'streamSubgraphs' | 'streamResumable'>
   >({});
@@ -593,6 +612,11 @@ const StreamSession = ({
   const lastThreadIdRef = useRef<string | null>(threadId ?? null);
   const suppressThreadChangeRef = useRef(false);
   const { isParentAvailable, sendCommand, sendEvent } = useParentMessenger();
+
+  useEffect(() => {
+    runtimeClientSecretRef.current = apiKey;
+    setRuntimeClientSecret(apiKey);
+  }, [apiKey]);
 
   // Notify the host page when the active thread changes. The host maps
   // `public_event` -> `chatkit.<event>` so sending ['thread.change', {...}]
@@ -614,31 +638,93 @@ const StreamSession = ({
     }
   }, [threadId]);
 
-  const client = useMemo(
-    () => new Client<StateType>({ apiUrl, apiKey, defaultHeaders: {
-      'Authorization': apiKey ? `Bearer ${apiKey}` : undefined,
-    },
-    onRequest: (url: URL, init: RequestInit) => {
-      const lastEventId = lastEventIdRef.current;
-      if (lastEventId && url.pathname.endsWith('/runs/stream')) {
-        const headers = init.headers;
-        if (!headers) {
-          init.headers = { 'Last-Event-ID': lastEventId };
-          return init;
-        }
-        if (headers instanceof Headers) {
-          headers.set('Last-Event-ID', lastEventId);
-          return init;
-        }
-        if (Array.isArray(headers)) {
-          init.headers = [...headers, ['Last-Event-ID', lastEventId]];
-          return init;
-        }
-        (headers as Record<string, string>)['Last-Event-ID'] = lastEventId;
+  const refreshClientSecret = useCallback(async (): Promise<string> => {
+    if (!isParentAvailable) {
+      throw new Error('[chatkit-ui] Parent window is not available for client secret refresh.');
+    }
+    if (refreshClientSecretPromiseRef.current) {
+      return refreshClientSecretPromiseRef.current;
+    }
+
+    const refreshPromise = (async () => {
+      const currentSecret = runtimeClientSecretRef.current.trim();
+      const response = await sendCommand('onGetClientSecret', currentSecret || null);
+      const nextSecret = typeof response === 'string' ? response.trim() : '';
+
+      if (!nextSecret) {
+        throw new Error('[chatkit-ui] Parent returned an invalid client secret.');
       }
-      return init;
-    } }),
-    [apiKey, apiUrl],
+
+      runtimeClientSecretRef.current = nextSecret;
+      setRuntimeClientSecret(nextSecret);
+      return nextSecret;
+    })();
+
+    refreshClientSecretPromiseRef.current = refreshPromise;
+    try {
+      return await refreshPromise;
+    } finally {
+      if (refreshClientSecretPromiseRef.current === refreshPromise) {
+        refreshClientSecretPromiseRef.current = null;
+      }
+    }
+  }, [isParentAvailable, sendCommand]);
+
+  const fetchWithClientSecretRefresh = useCallback<typeof fetch>(
+    async (input, init) => {
+      const requestWithSecret = (secret: string) => {
+        return fetch(input, {
+          ...init,
+          headers: withClientSecretHeaders(init?.headers, secret),
+        });
+      };
+
+      const currentSecret = runtimeClientSecretRef.current.trim();
+      const response = await requestWithSecret(currentSecret);
+      if (response.status !== 401) {
+        return response;
+      }
+
+      try {
+        const refreshedSecret = await refreshClientSecret();
+        return await requestWithSecret(refreshedSecret);
+      } catch (refreshError) {
+        console.warn('[chatkit-ui] Failed to refresh client secret:', refreshError);
+        return response;
+      }
+    },
+    [refreshClientSecret],
+  );
+
+  const client = useMemo(
+    () =>
+      new Client<StateType>({
+        apiUrl,
+        callerOptions: {
+          fetch: fetchWithClientSecretRefresh,
+        },
+        onRequest: (url: URL, init: RequestInit) => {
+          const lastEventId = lastEventIdRef.current;
+          if (lastEventId && url.pathname.endsWith('/runs/stream')) {
+            const headers = init.headers;
+            if (!headers) {
+              init.headers = { 'Last-Event-ID': lastEventId };
+              return init;
+            }
+            if (headers instanceof Headers) {
+              headers.set('Last-Event-ID', lastEventId);
+              return init;
+            }
+            if (Array.isArray(headers)) {
+              init.headers = [...headers, ['Last-Event-ID', lastEventId]];
+              return init;
+            }
+            (headers as Record<string, string>)['Last-Event-ID'] = lastEventId;
+          }
+          return init;
+        },
+      }),
+    [apiUrl, fetchWithClientSecretRefresh],
   );
 
   const stop = useCallback(() => {
@@ -656,7 +742,7 @@ const StreamSession = ({
 
   const loadConversationMessages = useCallback(
     async (recordId: string) => {
-      if (!apiUrl || !apiKey) {
+      if (!apiUrl || !runtimeClientSecret.trim()) {
         throw new Error('Missing API configuration');
       }
       try {
@@ -673,7 +759,7 @@ const StreamSession = ({
       setValues({ messages: mapped ?? [] });
       return mapped as ChatKitAIMessage[];
     },
-    [apiKey, apiUrl, client, stop],
+    [apiUrl, client, runtimeClientSecret, stop],
   );
 
   const reset = useCallback((
@@ -917,12 +1003,13 @@ const StreamSession = ({
   submitRef.current = submit;
 
   // isReady is true when we have a valid client secret (starts with 'cs-x-')
-  const isReady = Boolean(apiKey && apiKey.startsWith('cs-x-'));
+  const isReady = Boolean(runtimeClientSecret && runtimeClientSecret.startsWith('cs-x-'));
 
   const value: StreamContextType = {
     client,
     apiUrl,
     assistantId,
+    apiKey: runtimeClientSecret,
     threadId: threadId ?? null,
     values,
     messages: values.messages ?? [],
@@ -950,7 +1037,7 @@ export const StreamProvider: React.FC<{
 }> = ({ children, apiKey, apiUrl, xpertId }) => {
   return (
     <StreamSession
-      apiKey={apiKey ?? 'your-api-key'}
+      apiKey={apiKey ?? ''}
       apiUrl={apiUrl ?? defaultApiUrl }
       assistantId={xpertId ?? 'your-xpert-id'}
     >
