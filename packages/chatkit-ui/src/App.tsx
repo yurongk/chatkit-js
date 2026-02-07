@@ -10,9 +10,10 @@ import { useParentMessenger } from './hooks/useParentMessenger';
 export type AppProps = {
   options?: ChatKitOptions | null;
   clientSecret: string;
+  isClientSecretInitializing?: boolean;
 };
 
-export function App({ clientSecret, options }: AppProps) {
+export function App({ clientSecret, options, isClientSecretInitializing = false }: AppProps) {
   const { isParentAvailable, sendCommand } = useParentMessenger();
   const apiKey = clientSecret.trim() ? clientSecret : undefined;
   const xpertId = import.meta.env.VITE_XPERTAI_XPERT_ID as string | undefined;
@@ -38,6 +39,7 @@ export function App({ clientSecret, options }: AppProps) {
               className="flex-1"
               clientSecret={apiKey}
               options={options}
+              isClientSecretInitializing={isClientSecretInitializing}
             />
           </StreamProvider>
         </A2UIProvider>

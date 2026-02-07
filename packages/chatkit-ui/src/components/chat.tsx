@@ -24,6 +24,7 @@ export type ChatProps = {
   placeholder?: string;
   clientSecret?: string;
   options?: ChatKitOptions | null;
+  isClientSecretInitializing?: boolean;
 };
 
 const defaultApiUrl = import.meta.env.VITE_XPERTAI_API_URL as string | undefined;
@@ -63,6 +64,7 @@ export function Chat({
   title,
   placeholder,
   clientSecret = '',
+  isClientSecretInitializing = false,
 }: ChatProps) {
   const { t } = useChatkitTranslation();
   const composer = options?.composer;
@@ -70,7 +72,6 @@ export function Chat({
   const history = options?.history;
   const disclaimer = options?.disclaimer;
   const apiUrl = options?.api?.apiUrl || defaultApiUrl;
-  // const threadItemActions = options?.threadItemActions;
   const {setStream} = useStreamManager();
   const stream = useStreamContext();
 
@@ -122,7 +123,6 @@ export function Chat({
   const [attachments, setAttachments] = React.useState<UploadingFile[]>([]);
   const {
     threads,
-    createThread,
     deleteThread,
     refreshThreads,
     isLoading: isThreadsLoading,
@@ -165,8 +165,10 @@ export function Chat({
     }
   }, [stream.isLoading, messages, scrollToBottom]);
 
-  const hasApiKey = Boolean(clientSecret.trim());
+  const effectiveClientSecret = stream.apiKey?.trim() ? stream.apiKey : clientSecret;
+  const hasApiKey = Boolean(effectiveClientSecret.trim());
   const missingConfig = !apiUrl || !hasApiKey;
+  const showMissingConfig = !isClientSecretInitializing && missingConfig;
   // Check if any files are still uploading (moved up for use in isSendDisabled)
   const hasUploadingFiles = attachments.some((a) => a.status === 'uploading');
   const isSendDisabled =
@@ -196,12 +198,12 @@ export function Chat({
   const uploadedFiles = attachments
     .filter((a) => a.status === 'success' && a.storageFile)
     .map((a) => ({
-      id: a.storageFile!.id,
-      file: a.storageFile!.file,
-      url: a.storageFile!.url,
-      originalName: a.storageFile!.originalName ?? a.file.name,
-      mimetype: a.storageFile!.mimetype ?? a.file.type,
-      size: a.storageFile!.size ?? a.file.size,
+      id: a.storageFile?.id,
+      file: a.storageFile?.file,
+      url: a.storageFile?.url,
+      originalName: a.storageFile?.originalName ?? a.file.name,
+      mimetype: a.storageFile?.mimetype ?? a.file.type,
+      size: a.storageFile?.size ?? a.file.size,
     }));
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -342,7 +344,7 @@ export function Chat({
         await fetch(`${stream.apiUrl}/contexts/file/${attachment.storageFile.id}`, {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${clientSecret}`,
+            'Authorization': `Bearer ${effectiveClientSecret}`,
           },
         });
       } catch {
@@ -530,7 +532,7 @@ export function Chat({
         )}
       </div>
 
-      <div className="flex-1 px-6 py-4">
+      <div className="flex-1 p-4">
         {errorMessage && (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {errorMessage}
@@ -541,7 +543,7 @@ export function Chat({
             {historyError}
           </div>
         )}
-        {missingConfig && (
+        {showMissingConfig && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             {t('chat.missingConfigDetail')}
           </div>
@@ -580,7 +582,7 @@ export function Chat({
                       : 'justify-start -ml-1',  // AI messages: slightly closer to left
                   )}
                 >
-                  <div className="flex flex-col overflow-hidden">
+                  <div className="flex flex-col px-2 overflow-hidden">
                     <div
                       className={cn(
                         'max-w-full rounded-2xl',
@@ -619,13 +621,13 @@ export function Chat({
                             message.content.map((part, partIndex) => (
                               <p
                                 key={`${part.type}-${partIndex}`}
-                                className="break-words text-sm leading-relaxed"
+                                className="wrap-break-word text-sm leading-relaxed"
                               >
                                 {formatMessageContent(part as any)}
                               </p>
                             ))
                           ) : (
-                            <span className="break-words text-sm leading-relaxed">
+                            <span className="wrap-break-word text-sm leading-relaxed">
                               {formatMessageContent(message.content)}
                             </span>
                           )}
