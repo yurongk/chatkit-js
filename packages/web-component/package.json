@@ -34,7 +34,7 @@
     "vite-plugin-dts": "^3.7.0"
   },
   "dependencies": {
-    "@xpert-ai/chatkit-types": "workspace:*",
-    "@xpert-ai/chatkit-web-shared": "workspace:*"
+    "@xpert-ai/chatkit-types": "workspace:~",
+    "@xpert-ai/chatkit-web-shared": "workspace:~"
   }
 }

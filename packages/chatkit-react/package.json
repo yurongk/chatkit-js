@@ -1,6 +1,6 @@
 {
   "name": "@xpert-ai/chatkit-react",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "React bindings for Xpert Chatkit",
   "type": "module",
   "sideEffects": false,
@@ -26,8 +26,8 @@
     "react-dom": ">=18"
   },
   "dependencies": {
-    "@xpert-ai/chatkit-types": "workspace:*",
-    "@xpert-ai/chatkit-web-component": "workspace:*"
+    "@xpert-ai/chatkit-types": "workspace:~",
+    "@xpert-ai/chatkit-web-component": "workspace:~"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",

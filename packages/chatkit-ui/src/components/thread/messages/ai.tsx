@@ -9,7 +9,9 @@ import type {
   TMessageContentMemory,
   TMessageContentReasoning,
   TMessageContentText,
+  TMessageComponentStep,
 } from '@xpert-ai/chatkit-types';
+import { ChevronDown, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';
 import { Badge } from '../../ui/badge';
@@ -39,6 +41,22 @@ function isImageContent(content: TMessageContentComplex): content is MessageCont
 function isComponentContent(content: TMessageContentComplex): content is TMessageContentComponent {
   return content.type === 'component';
 }
+
+// Status styling configuration
+const statusConfig = {
+  success: {
+    iconClass: 'border-green-500 text-green-700',
+    icon: CheckCircle2,
+  },
+  fail: {
+    iconClass: 'border-red-500 text-red-700',
+    icon: XCircle,
+  },
+  running: {
+    iconClass: 'border-blue-500 text-blue-700',
+    icon: Loader2,
+  },
+};
 
 function isWidgetComponent(
   content: TMessageContentComponent,
@@ -119,8 +137,10 @@ function MemoryBlock({ content }: { content: TMessageContentMemory }) {
   );
 }
 
-function ComponentBlock({ content }: { content: TMessageContentComponent }) {
-  const data = (content.data ?? {}) as Record<string, unknown>;
+function ComponentBlock({ content }: { content: TMessageContentComponent<TMessageComponentStep> }) {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  
+  const data = content.data ?? {}
   const title =
     typeof data.title === 'string'
       ? data.title
@@ -128,26 +148,50 @@ function ComponentBlock({ content }: { content: TMessageContentComponent }) {
         ? data.type
         : 'Component';
   const category = typeof data.category === 'string' ? data.category : 'Component';
-  const status = typeof data.status === 'string' ? data.status : null;
+  const status = typeof data.status === 'string' ? data.status as 'success' | 'fail' | 'running' : null;
   const message = typeof data.message === 'string' ? data.message : null;
   const output = typeof data.output === 'string' ? data.output : null;
-  const fallback = message ?? output ?? safeJson(data.data ?? data.input ?? data);
+  const error = data.error || null;
+  const fallback = message ?? output ?? safeJson(data.data ?? data);
+
+  const config = status ? statusConfig[status] : null;
+  const StatusIcon = config?.icon;
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2">
-        <div className="space-y-1">
-          <CardTitle className="text-sm">{title}</CardTitle>
-          <p className="text-xs text-muted-foreground">{category}</p>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 px-2 py-1 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+        <div className="flex items-center space-x-1 flex-1 min-w-0">
+          {status && StatusIcon && (
+            <StatusIcon className={cn("h-4 w-4", config?.iconClass, status === 'running' && "animate-spin")} />
+          )}
+          <CardTitle className="text-sm truncate">{title}</CardTitle>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{category}</Badge>
-          {status && <Badge variant="outline">{status}</Badge>}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Badge variant="secondary" className="rounded-lg px-1.5">{category}</Badge>
+          <button
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={isExpanded ? "Collapse" : "Expand"}
+          >
+            <ChevronDown
+              className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")}
+            />
+          </button>
         </div>
       </CardHeader>
-      <CardContent className="text-xs text-muted-foreground">
-        <pre className="whitespace-pre-wrap break-words">{fallback}</pre>
-      </CardContent>
+      {isExpanded && (
+        <CardContent className="text-xs text-muted-foreground max-h-60 overflow-auto">
+          {data.input && (
+            <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(data.input, null, 2)}</pre>
+          )}
+          {error ? (
+            <pre className="whitespace-pre-wrap wrap-break-word text-destructive">{typeof error === 'string' ? error : safeJson(error)}</pre>
+          ) : (
+            output && (
+              <pre className="whitespace-pre-wrap wrap-break-word">{fallback}</pre>
+            )
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 }
