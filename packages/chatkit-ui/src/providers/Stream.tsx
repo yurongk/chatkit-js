@@ -18,10 +18,17 @@ import {
 } from '@xpert-ai/xpert-sdk';
 import type { Message } from '@langchain/core/messages';
 import { type ToolCall } from '@langchain/core/messages/tool';
-import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent } from '@xpert-ai/chatkit-types';
+import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent, type ChatEventEnvelope, type TMessageContentComplex, type TMessageContentComponent } from '@xpert-ai/chatkit-types';
 import { appendMessageContent } from '../lib/message';
 import { useParentMessenger } from '../hooks/useParentMessenger';
 import type { ParentMessenger } from './ParentMessenger';
+import {
+  createLangGraphEventState,
+  mapLangGraphEventToChatKit,
+  type LangGraphEventContext,
+  type LangGraphEventState,
+} from './langGraphEventMapper';
+import { createMessageId } from '../lib/utils';
 
 type ChatKitAIMessage = Message & { executionId?: string };
 
@@ -32,7 +39,6 @@ export type StreamSubmitOptions = {
     | Partial<StateType>
     | ((prev: StateType) => Partial<StateType>);
   context?: Record<string, unknown>;
-  // command?: Command;
   config?: Config;
   checkpoint?: Omit<Checkpoint, 'thread_id'> | null;
   streamMode?: StreamMode | StreamMode[];
@@ -40,12 +46,14 @@ export type StreamSubmitOptions = {
   streamResumable?: boolean;
   threadId?: string;
   newThread?: boolean;
+  joinExistingThread?: boolean;
 };
 
 export type StreamContextType = {
   client: Client<StateType>;
   apiUrl: string;
   assistantId: string;
+  apiKey: string;
   threadId: string | null;
   values: StateType;
   messages: ChatKitAIMessage[];
@@ -75,6 +83,21 @@ const defaultApiUrl =
 
 const DEFAULT_HISTORY_LIMIT = 200;
 
+function withClientSecretHeaders(
+  headers: HeadersInit | undefined,
+  clientSecret: string,
+): Headers {
+  const nextHeaders = new Headers(headers);
+  if (clientSecret) {
+    nextHeaders.set('Authorization', `Bearer ${clientSecret}`);
+    nextHeaders.set('x-api-key', clientSecret);
+  } else {
+    nextHeaders.delete('Authorization');
+    nextHeaders.delete('x-api-key');
+  }
+  return nextHeaders;
+}
+
 function applyOptimisticValues(
   prev: StateType,
   optimistic:
@@ -85,26 +108,19 @@ function applyOptimisticValues(
   return { ...prev, ...update };
 }
 
-function parseEventData(raw: unknown) {
+function parseEventData(raw: string): ChatEventEnvelope | null {
   if (typeof raw === 'string') {
     if (!raw || raw.startsWith(':')) return null;
     try {
-      return JSON.parse(raw);
+      return JSON.parse(raw) as ChatEventEnvelope;
     } catch {
-      return raw;
+      return raw as unknown as ChatEventEnvelope;
     }
   }
-  return raw;
+  return raw as ChatEventEnvelope;
 }
 
-type StreamChunk = { id?: string; event: string; data: unknown };
-
-function createMessageId() {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  );
-}
+type StreamChunk = { id?: string; event: string; data: string };
 
 function normalizeRoleToMessageType(role?: string): Message['type'] {
   const normalized = (role ?? '').toLowerCase();
@@ -317,9 +333,12 @@ function applyMessageData(
   }
 }
 
+/**
+ * Append a complex message content (e.g., with components) into the latest message
+ */
 function appendMessageComponent(
   setValues: React.Dispatch<React.SetStateAction<StateType>>,
-  content: TMessageContent) {
+  content: TMessageContentComplex) {
   updateLatestMessage(setValues, (lastM) => {
       // Deep clone the message to avoid mutation issues with React Strict Mode
       // React Strict Mode calls state updater twice, and appendMessageContent mutates the content array
@@ -389,12 +408,17 @@ function normalizeToolMessagesResponse(response: unknown): ClientToolMessageInpu
   return null
 }
 
+/**
+ * Process each stream event chunk
+ */
 function applyStreamEvent(
   chunk: StreamChunk,
   setValues: React.Dispatch<React.SetStateAction<StateType>>,
   setError: React.Dispatch<React.SetStateAction<unknown>>,
   sendEvent: ParentMessenger['sendEvent'],
   interrupts: unknown[],
+  langGraphEventState: LangGraphEventState,
+  eventContext?: LangGraphEventContext,
   onExecutionId?: (executionId: string | undefined) => void,
 ) {
   const parsed = parseEventData(chunk.data);
@@ -430,11 +454,7 @@ function applyStreamEvent(
 
   if (typeof parsed !== 'object' || parsed == null) return;
 
-  const payload = parsed as {
-    type: ChatMessageTypeEnum;
-    event?: ChatMessageEventTypeEnum;
-    data?: unknown;
-  };
+  const payload = parsed as ChatEventEnvelope<TMessageContentComponent<any>>
 
   const payloadType: ChatMessageTypeEnum = payload.type
 
@@ -443,7 +463,12 @@ function applyStreamEvent(
       appendStreamTextToLatest(setValues, payload.data);
       return;
     }
-    appendMessageComponent(setValues, payload.data as TMessageContent);
+
+    const message = payload.data
+    if (message.type === 'component') {
+      sendEvent('public_event', ['log', {...message, name: 'component'}]);
+    }
+    appendMessageComponent(setValues, message);
     return;
   }
 
@@ -451,6 +476,18 @@ function applyStreamEvent(
     const eventType =
       (typeof payload.event === 'string' ? payload.event.toLowerCase() : '') as ChatMessageEventTypeEnum;
     const meta = extractMessageMeta(payload.data);
+    const executionId = extractExecutionId(payload.data);
+
+    mapLangGraphEventToChatKit({
+      eventType,
+      data: payload.data,
+      tags: payload.tags,
+      messageType: typeof meta.type === 'string' ? meta.type : undefined,
+      executionId,
+      sendEvent,
+      state: langGraphEventState,
+      context: eventContext,
+    });
 
     switch (eventType) {
       case ChatMessageEventTypeEnum.ON_CONVERSATION_START:
@@ -462,7 +499,6 @@ function applyStreamEvent(
         break;
       }
       case ChatMessageEventTypeEnum.ON_MESSAGE_START: {
-        const executionId = extractExecutionId(payload.data);
         if (executionId) {
           onExecutionId?.(executionId);
         }
@@ -523,19 +559,10 @@ function applyStreamEvent(
       }
       case ChatMessageEventTypeEnum.ON_INTERRUPT: {
         interrupts.push(payload.data);
-        // if (onInterrupt) {
-        //   const maybePromise = onInterrupt(payload.data);
-        //   if (
-        //     maybePromise &&
-        //     typeof (maybePromise as Promise<void>).catch === 'function'
-        //   ) {
-        //     (maybePromise as Promise<void>).catch(setError);
-        //   }
-        // }
         break;
       }
       case ChatMessageEventTypeEnum.ON_CLIENT_EFFECT: {
-        const toolCall = payload.data as ToolCall;
+        const toolCall = payload.data as unknown as ToolCall;
         sendEvent('public_event', ['effect', {name: toolCall.name, data: toolCall.args}]);
         break
       }
@@ -571,8 +598,11 @@ const StreamSession = ({
   const [values, setValues] = useState<StateType>({ messages: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [runtimeClientSecret, setRuntimeClientSecret] = useState(apiKey);
   const abortRef = useRef<AbortController | null>(null);
   const submitRef = useRef<StreamContextType['submit'] | null>(null);
+  const runtimeClientSecretRef = useRef(apiKey);
+  const refreshClientSecretPromiseRef = useRef<Promise<string> | null>(null);
   const lastStreamOptionsRef = useRef<
     Pick<StreamSubmitOptions, 'streamMode' | 'streamSubgraphs' | 'streamResumable'>
   >({});
@@ -582,6 +612,11 @@ const StreamSession = ({
   const lastThreadIdRef = useRef<string | null>(threadId ?? null);
   const suppressThreadChangeRef = useRef(false);
   const { isParentAvailable, sendCommand, sendEvent } = useParentMessenger();
+
+  useEffect(() => {
+    runtimeClientSecretRef.current = apiKey;
+    setRuntimeClientSecret(apiKey);
+  }, [apiKey]);
 
   // Notify the host page when the active thread changes. The host maps
   // `public_event` -> `chatkit.<event>` so sending ['thread.change', {...}]
@@ -603,31 +638,93 @@ const StreamSession = ({
     }
   }, [threadId]);
 
-  const client = useMemo(
-    () => new Client<StateType>({ apiUrl, apiKey, defaultHeaders: {
-      'Authorization': apiKey ? `Bearer ${apiKey}` : undefined,
-    },
-    onRequest: (url: URL, init: RequestInit) => {
-      const lastEventId = lastEventIdRef.current;
-      if (lastEventId && url.pathname.endsWith('/runs/stream')) {
-        const headers = init.headers;
-        if (!headers) {
-          init.headers = { 'Last-Event-ID': lastEventId };
-          return init;
-        }
-        if (headers instanceof Headers) {
-          headers.set('Last-Event-ID', lastEventId);
-          return init;
-        }
-        if (Array.isArray(headers)) {
-          init.headers = [...headers, ['Last-Event-ID', lastEventId]];
-          return init;
-        }
-        (headers as Record<string, string>)['Last-Event-ID'] = lastEventId;
+  const refreshClientSecret = useCallback(async (): Promise<string> => {
+    if (!isParentAvailable) {
+      throw new Error('[chatkit-ui] Parent window is not available for client secret refresh.');
+    }
+    if (refreshClientSecretPromiseRef.current) {
+      return refreshClientSecretPromiseRef.current;
+    }
+
+    const refreshPromise = (async () => {
+      const currentSecret = runtimeClientSecretRef.current.trim();
+      const response = await sendCommand('onGetClientSecret', currentSecret || null);
+      const nextSecret = typeof response === 'string' ? response.trim() : '';
+
+      if (!nextSecret) {
+        throw new Error('[chatkit-ui] Parent returned an invalid client secret.');
       }
-      return init;
-    } }),
-    [apiKey, apiUrl],
+
+      runtimeClientSecretRef.current = nextSecret;
+      setRuntimeClientSecret(nextSecret);
+      return nextSecret;
+    })();
+
+    refreshClientSecretPromiseRef.current = refreshPromise;
+    try {
+      return await refreshPromise;
+    } finally {
+      if (refreshClientSecretPromiseRef.current === refreshPromise) {
+        refreshClientSecretPromiseRef.current = null;
+      }
+    }
+  }, [isParentAvailable, sendCommand]);
+
+  const fetchWithClientSecretRefresh = useCallback<typeof fetch>(
+    async (input, init) => {
+      const requestWithSecret = (secret: string) => {
+        return fetch(input, {
+          ...init,
+          headers: withClientSecretHeaders(init?.headers, secret),
+        });
+      };
+
+      const currentSecret = runtimeClientSecretRef.current.trim();
+      const response = await requestWithSecret(currentSecret);
+      if (response.status !== 401) {
+        return response;
+      }
+
+      try {
+        const refreshedSecret = await refreshClientSecret();
+        return await requestWithSecret(refreshedSecret);
+      } catch (refreshError) {
+        console.warn('[chatkit-ui] Failed to refresh client secret:', refreshError);
+        return response;
+      }
+    },
+    [refreshClientSecret],
+  );
+
+  const client = useMemo(
+    () =>
+      new Client<StateType>({
+        apiUrl,
+        callerOptions: {
+          fetch: fetchWithClientSecretRefresh,
+        },
+        onRequest: (url: URL, init: RequestInit) => {
+          const lastEventId = lastEventIdRef.current;
+          if (lastEventId && url.pathname.endsWith('/runs/stream')) {
+            const headers = init.headers;
+            if (!headers) {
+              init.headers = { 'Last-Event-ID': lastEventId };
+              return init;
+            }
+            if (headers instanceof Headers) {
+              headers.set('Last-Event-ID', lastEventId);
+              return init;
+            }
+            if (Array.isArray(headers)) {
+              init.headers = [...headers, ['Last-Event-ID', lastEventId]];
+              return init;
+            }
+            (headers as Record<string, string>)['Last-Event-ID'] = lastEventId;
+          }
+          return init;
+        },
+      }),
+    [apiUrl, fetchWithClientSecretRefresh],
   );
 
   const stop = useCallback(() => {
@@ -645,7 +742,7 @@ const StreamSession = ({
 
   const loadConversationMessages = useCallback(
     async (recordId: string) => {
-      if (!apiUrl || !apiKey) {
+      if (!apiUrl || !runtimeClientSecret.trim()) {
         throw new Error('Missing API configuration');
       }
       try {
@@ -662,7 +759,7 @@ const StreamSession = ({
       setValues({ messages: mapped ?? [] });
       return mapped as ChatKitAIMessage[];
     },
-    [apiKey, apiUrl, client, stop],
+    [apiUrl, client, runtimeClientSecret, stop],
   );
 
   const reset = useCallback((
@@ -735,26 +832,32 @@ const StreamSession = ({
     nextThreadId: string,
     input?: TChatRequest | null,
     options?: StreamSubmitOptions,
+    runId?: string,
   ) => {
     const abortController = new AbortController();
     abortRef.current?.abort();
     abortRef.current = abortController;
     setIsLoading(true);
-
     try {
-      const stream = client.runs.stream(nextThreadId, assistantId, {
-        input: input ?? null,
-        context: options?.context,
-        config: options?.config,
-        checkpoint: options?.checkpoint ?? undefined,
-        streamMode: options?.streamMode,
-        streamSubgraphs: options?.streamSubgraphs,
-        streamResumable: options?.streamResumable,
-        signal: abortController.signal,
-        onDisconnect: 'continue'
-      });
+      const stream = options?.joinExistingThread ? client.runs.joinStream(nextThreadId, runId) :
+        client.runs.stream(nextThreadId, assistantId, {
+          input: input ?? null,
+          context: options?.context,
+          config: options?.config,
+          checkpoint: options?.checkpoint ?? undefined,
+          streamMode: options?.streamMode,
+          streamSubgraphs: options?.streamSubgraphs,
+          streamResumable: options?.streamResumable,
+          signal: abortController.signal,
+          onDisconnect: 'continue'
+        });
 
-      const interrupts: unknown[] = []
+      const interrupts: unknown[] = [];
+      const langGraphEventState = createLangGraphEventState();
+      const eventContext: LangGraphEventContext = {
+        threadId: nextThreadId,
+        input,
+      };
       for await (const chunk of stream) {
         if (chunk?.id) {
           lastEventIdRef.current = String(chunk.id);
@@ -765,6 +868,8 @@ const StreamSession = ({
           setError,
           sendEvent,
           interrupts,
+          langGraphEventState,
+          eventContext,
           (executionId) => {
             if (executionId) {
               lastExecutionIdRef.current = executionId;
@@ -833,50 +938,7 @@ const StreamSession = ({
       if (!runId) return;
       lastExecutionIdRef.current = runId;
 
-      await runStream(threadId, null, {});
-
-      // const abortController = new AbortController();
-      // abortRef.current?.abort();
-      // abortRef.current = abortController;
-      // setIsLoading(true);
-
-      // try {
-      //   const stream = client.runs.joinStream(threadId, runId, {
-      //     streamMode: lastStreamOptionsRef.current.streamMode,
-      //     signal: abortController.signal,
-      //   });
-
-      //   const interrupts: unknown[] = []
-      //   for await (const chunk of stream) {
-      //     if (chunk?.id) {
-      //       lastEventIdRef.current = String(chunk.id);
-      //     }
-      //     applyStreamEvent(
-      //       chunk as StreamChunk,
-      //       setValues,
-      //       setError,
-      //       sendEvent,
-      //       interrupts,
-      //       (executionId) => {
-      //         if (executionId) {
-      //           lastExecutionIdRef.current = executionId;
-      //         }
-      //       },
-      //     );
-      //   }
-      // } catch (streamError) {
-      //   if (!(
-      //       streamError instanceof DOMException &&
-      //       streamError.name === 'AbortError'
-      //     )) {
-      //     setError(streamError);
-      //   }
-      // } finally {
-      //   if (abortRef.current === abortController) {
-      //     abortRef.current = null;
-      //   }
-      //   setIsLoading(false);
-      // }
+      await runStream(threadId, null, {joinExistingThread: true}, runId);
     },
     [client, runStream, stop, loadConversationMessages, setThreadId],
   );
@@ -934,53 +996,6 @@ const StreamSession = ({
       }
 
       await runStream(nextThreadId, input, options);
-
-      // const abortController = new AbortController();
-      // abortRef.current?.abort();
-      // abortRef.current = abortController;
-      // setIsLoading(true);
-
-      // try {
-      //   const stream = client.runs.stream(nextThreadId, assistantId, {
-      //     input: input ?? null,
-      //     context: options?.context,
-      //     config: options?.config,
-      //     checkpoint: options?.checkpoint ?? undefined,
-      //     streamMode: options?.streamMode,
-      //     streamSubgraphs: options?.streamSubgraphs,
-      //     streamResumable: options?.streamResumable,
-      //     signal: abortController.signal,
-      //     onDisconnect: 'continue'
-      //   });
-
-      //   const interrupts: unknown[] = []
-      //   for await (const chunk of stream) {
-      //     if (chunk?.id) {
-      //       lastEventIdRef.current = String(chunk.id);
-      //     }
-      //     applyStreamEvent(
-      //       chunk as StreamChunk,
-      //       setValues,
-      //       setError,
-      //       sendEvent,
-      //       interrupts,
-      //       (executionId) => {
-      //         if (executionId) {
-      //           lastExecutionIdRef.current = executionId;
-      //         }
-      //       },
-      //     );
-      //   }
-      // } catch (streamError) {
-      //   if (!(streamError instanceof DOMException && streamError.name === 'AbortError')) {
-      //     setError(streamError);
-      //   }
-      // } finally {
-      //   if (abortRef.current === abortController) {
-      //     abortRef.current = null;
-      //   }
-      //   setIsLoading(false);
-      // }
     },
     [client, runStream, setThreadId, threadId],
   );
@@ -988,12 +1003,13 @@ const StreamSession = ({
   submitRef.current = submit;
 
   // isReady is true when we have a valid client secret (starts with 'cs-x-')
-  const isReady = Boolean(apiKey && apiKey.startsWith('cs-x-'));
+  const isReady = Boolean(runtimeClientSecret && runtimeClientSecret.startsWith('cs-x-'));
 
   const value: StreamContextType = {
     client,
     apiUrl,
     assistantId,
+    apiKey: runtimeClientSecret,
     threadId: threadId ?? null,
     values,
     messages: values.messages ?? [],
@@ -1021,7 +1037,7 @@ export const StreamProvider: React.FC<{
 }> = ({ children, apiKey, apiUrl, xpertId }) => {
   return (
     <StreamSession
-      apiKey={apiKey ?? 'your-api-key'}
+      apiKey={apiKey ?? ''}
       apiUrl={apiUrl ?? defaultApiUrl }
       assistantId={xpertId ?? 'your-xpert-id'}
     >

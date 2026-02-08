@@ -20,6 +20,8 @@ export { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 export { ParentMessengerProvider } from './providers/ParentMessenger';
 export { useParentMessenger } from './hooks/useParentMessenger';
 export type { ParentMessenger, ParentMessengerProviderProps } from './providers/ParentMessenger';
+export { ThemeProvider, useTheme } from './providers/Theme';
+export type { ThemeProviderProps } from './providers/Theme';
 export {
   getLanguage as getChatkitLanguage,
   setLanguage as setChatkitLanguage,

@@ -49,6 +49,12 @@ const initialOptions = decodeOptionsFromUrl();
 const AppContainer = () => {
   const [clientSecret, setClientSecret] = React.useState(initialClientSecret);
   const [options, setOptions] = React.useState<ChatKitOptions | null>(initialOptions);
+  const [isClientSecretInitializing, setIsClientSecretInitializing] = React.useState(() => {
+    if (typeof window === 'undefined') return false;
+    const hasInitialSecret = Boolean(initialClientSecret.trim());
+    const isInsideIframe = window.parent !== window;
+    return isInsideIframe && !hasInitialSecret;
+  });
   const initialClientSecretRef = React.useRef(initialClientSecret);
   const parentOriginRef = React.useRef<string>('*');
   const { isParentAvailable, sendCommand } = useParentMessenger({
@@ -70,19 +76,6 @@ const AppContainer = () => {
       ) {
         return;
       }
-
-      // const payload = event.data as {
-      //   type?: string;
-      //   clientSecret?: string;
-      //   assistantId?: string;
-      // };
-
-      // Handle client secret from postMessage
-      // if (payload.type === 'chatkit:init' || payload.type === 'chatkit:client-secret') {
-      //   if (typeof payload.clientSecret === 'string') {
-      //     setClientSecret(payload.clientSecret);
-      //   }
-      // }
     };
 
     window.addEventListener('message', handleMessage);
@@ -90,12 +83,21 @@ const AppContainer = () => {
   }, []);
 
   React.useEffect(() => {
-    if (!isParentAvailable) return;
+    const needsInitialSecret = !initialClientSecretRef.current.trim();
+    if (!isParentAvailable) {
+      if (needsInitialSecret) {
+        setIsClientSecretInitializing(false);
+      }
+      return;
+    }
 
     parentOriginRef.current = getParentOrigin();
     const currentSecret = initialClientSecretRef.current.trim()
       ? initialClientSecretRef.current
       : null;
+    if (needsInitialSecret) {
+      setIsClientSecretInitializing(true);
+    }
 
     let isActive = true;
     sendCommand("onGetClientSecret", currentSecret)
@@ -108,6 +110,12 @@ const AppContainer = () => {
       .catch((error) => {
         if (!isActive) return;
         console.warn("[chatkit-ui] Failed to fetch client secret:", error);
+      })
+      .finally(() => {
+        if (!isActive) return;
+        if (needsInitialSecret) {
+          setIsClientSecretInitializing(false);
+        }
       });
 
     return () => {
@@ -115,7 +123,13 @@ const AppContainer = () => {
     };
   }, [isParentAvailable, sendCommand]);
 
-  return <App clientSecret={clientSecret} options={options} />;
+  return (
+    <App
+      clientSecret={clientSecret}
+      options={options}
+      isClientSecretInitializing={isClientSecretInitializing}
+    />
+  );
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

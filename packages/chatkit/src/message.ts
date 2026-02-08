@@ -35,6 +35,16 @@ export enum ChatMessageEventTypeEnum {
 }
 
 /**
+ * Encapsulate multi-agent message events
+ */
+export interface ChatEventEnvelope<T = unknown> {
+  type: ChatMessageTypeEnum
+  event?: ChatMessageEventTypeEnum
+  tags: string[]
+	data: T
+}
+
+/**
  * Category of step message: determines the display components of computer use
  */
 export enum ChatMessageStepCategory {
@@ -211,7 +221,7 @@ export type TChatEventMessage = {
 
 export interface ChatkitMessage {
   status?: string
-  content: TMessageItems
+  content: TMessageItems | string
   reasoning?: TMessageContentReasoning[]
   type: 'user' | 'assistant' | 'system' | 'tool' | 'event'
   id: string

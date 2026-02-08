@@ -3,7 +3,31 @@ import type { ChatKitTheme, ColorScheme, GrayscaleOptions } from '@xpert-ai/chat
 
 export interface ThemeProviderProps {
   children: React.ReactNode;
-  theme?: ColorScheme | ChatKitTheme;
+  /**
+   * Theme configuration. Accepts ChatKitTheme object or ColorScheme string for backward compatibility.
+   * ColorScheme string will be normalized to ChatKitTheme object internally.
+   * @preferred ChatKitTheme
+   */
+  theme?: ChatKitTheme | ColorScheme;
+}
+
+interface ThemeContextValue {
+  /**
+   * Normalized theme configuration as ChatKitTheme object.
+   * ColorScheme strings are converted to ChatKitTheme for consistent access.
+   */
+  theme: ChatKitTheme;
+  isDarkMode: boolean;
+}
+
+const ThemeContext = React.createContext<ThemeContextValue | undefined>(undefined);
+
+export function useTheme(): ThemeContextValue {
+  const context = React.useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
 }
 
 /**
@@ -165,7 +189,7 @@ function getRadiusValue(radius: string): string {
     case 'soft':
       return '0.5rem';
     case 'sharp':
-      return '0.25rem';
+      return '0';
     default:
       return '0.5rem';
   }
@@ -283,26 +307,35 @@ function adjustAccentByLevel(
 /**
  * ThemeProvider applies theme configuration via CSS variables
  */
-export function ThemeProvider({ children, theme }: ThemeProviderProps) {
+export function ThemeProvider({ children, theme: themeProp }: ThemeProviderProps) {
   const themeRef = React.useRef<HTMLDivElement>(null);
+
+  // Normalize theme to ChatKitTheme object
+  const theme = React.useMemo<ChatKitTheme>(() => {
+    if (typeof themeProp === 'string') {
+      // Convert ColorScheme string to ChatKitTheme object
+      return {
+        colorScheme: themeProp,
+      };
+    }
+    return themeProp || {};
+  }, [themeProp]);
+
+  // Calculate isDarkMode based on normalized theme
+  const isDarkMode = React.useMemo(() => {
+    return theme.colorScheme === 'dark';
+  }, [theme]);
+
+  const contextValue = React.useMemo<ThemeContextValue>(
+    () => ({ theme, isDarkMode }),
+    [theme, isDarkMode]
+  );
 
   React.useEffect(() => {
     if (!themeRef.current) return;
     const el = themeRef.current;
 
-    // Handle simple color scheme string
-    if (typeof theme === 'string') {
-      if (theme === 'dark') {
-        el.classList.add('dark');
-      } else {
-        el.classList.remove('dark');
-      }
-      return;
-    }
-
-    if (!theme) return;
-
-    // Handle full theme object
+    // Handle full theme object (always an object after normalization)
     const { colorScheme, radius, density, typography, color } = theme;
     const isDarkMode = colorScheme === 'dark';
 
@@ -380,15 +413,16 @@ export function ThemeProvider({ children, theme }: ThemeProviderProps) {
 
       // Accent color with level adjustment
       if (color.accent?.primary) {
-        const level = color.accent.level ?? 2; // Default to level 2 (no adjustment)
-        const { primary, ring } = adjustAccentByLevel(color.accent.primary, level);
+        // const level = color.accent.level ?? 2; // Default to level 2 (no adjustment)
+        // const { primary, ring } = adjustAccentByLevel(color.accent.primary, level);
+        const primary = color.accent?.primary
 
         el.style.setProperty('--primary', primary);
         el.style.setProperty('--accent', primary);
-        el.style.setProperty('--ring', ring);
+        // el.style.setProperty('--ring', ring);
         root.style.setProperty('--primary', primary);
         root.style.setProperty('--accent', primary);
-        root.style.setProperty('--ring', ring);
+        // root.style.setProperty('--ring', ring);
 
         // Calculate and set primary-foreground based on luminance
         const primaryLuminance = getLuminance(color.accent.primary);
@@ -409,10 +443,9 @@ export function ThemeProvider({ children, theme }: ThemeProviderProps) {
 
       // Surface colors
       if (color.surface?.background) {
-        const oklchValue = hexToOklch(color.surface.background);
-        if (oklchValue) {
-          el.style.setProperty('--background', oklchValue);
-          root.style.setProperty('--background', oklchValue);
+        if (color.surface.background) {
+          el.style.setProperty('--background', color.surface.background);
+          root.style.setProperty('--background', color.surface.background);
         }
 
         // Auto-calculate chat-foreground based on background luminance
@@ -467,15 +500,17 @@ export function ThemeProvider({ children, theme }: ThemeProviderProps) {
   }, [theme]);
 
   return (
-    <div
-      ref={themeRef}
-      className="h-full w-full bg-background text-foreground"
-      style={{
-        ...(theme?.typography?.fontFamily && { fontFamily: theme.typography.fontFamily }),
-      }}
-    >
-      {children}
-    </div>
+    <ThemeContext.Provider value={contextValue}>
+      <div
+        ref={themeRef}
+        className="h-full w-full bg-background text-foreground"
+        style={{
+          ...(theme.typography?.fontFamily && { fontFamily: theme.typography.fontFamily }),
+        }}
+      >
+        {children}
+      </div>
+    </ThemeContext.Provider>
   );
 }
 

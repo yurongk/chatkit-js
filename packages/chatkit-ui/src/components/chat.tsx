@@ -4,36 +4,8 @@ import { FileText, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
 import type { Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
 
-/**
- * Represents a file stored on the server.
- * Returned by the file upload API.
- */
-interface StorageFile {
-  id: string;
-  file: string;
-  url?: string;
-  originalName?: string;
-  size?: number;
-  mimetype?: string;
-}
-
-/**
- * Represents a file being uploaded or already uploaded.
- */
-type UploadingFile = {
-  /** Local unique ID for tracking */
-  localId: string;
-  /** Original File object */
-  file: File;
-  /** Upload status */
-  status: 'uploading' | 'success' | 'error';
-  /** Server-side file info after successful upload */
-  storageFile?: StorageFile;
-  /** Error message if upload failed */
-  error?: string;
-};
-
-import { cn } from '../lib/utils';
+import { cn, createMessageId } from '../lib/utils';
+import { type StorageFile, type UploadingFile } from '../lib/types';
 import { useStreamContext } from '../providers/Stream';
 import { ComposerMenu } from './composer/ComposerMenu';
 import { SendButton } from './composer/SendButton';
@@ -52,15 +24,10 @@ export type ChatProps = {
   placeholder?: string;
   clientSecret?: string;
   options?: ChatKitOptions | null;
+  isClientSecretInitializing?: boolean;
 };
 
 const defaultApiUrl = import.meta.env.VITE_XPERTAI_API_URL as string | undefined;
-function createMessageId() {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  );
-}
 
 function formatMessageContent(content: Message['content'][number]): string {
   if (typeof content === 'string') {
@@ -97,6 +64,7 @@ export function Chat({
   title,
   placeholder,
   clientSecret = '',
+  isClientSecretInitializing = false,
 }: ChatProps) {
   const { t } = useChatkitTranslation();
   const composer = options?.composer;
@@ -104,7 +72,6 @@ export function Chat({
   const history = options?.history;
   const disclaimer = options?.disclaimer;
   const apiUrl = options?.api?.apiUrl || defaultApiUrl;
-  // const threadItemActions = options?.threadItemActions;
   const {setStream} = useStreamManager();
   const stream = useStreamContext();
 
@@ -156,7 +123,6 @@ export function Chat({
   const [attachments, setAttachments] = React.useState<UploadingFile[]>([]);
   const {
     threads,
-    createThread,
     deleteThread,
     refreshThreads,
     isLoading: isThreadsLoading,
@@ -199,8 +165,10 @@ export function Chat({
     }
   }, [stream.isLoading, messages, scrollToBottom]);
 
-  const hasApiKey = Boolean(clientSecret.trim());
+  const effectiveClientSecret = stream.apiKey?.trim() ? stream.apiKey : clientSecret;
+  const hasApiKey = Boolean(effectiveClientSecret.trim());
   const missingConfig = !apiUrl || !hasApiKey;
+  const showMissingConfig = !isClientSecretInitializing && missingConfig;
   // Check if any files are still uploading (moved up for use in isSendDisabled)
   const hasUploadingFiles = attachments.some((a) => a.status === 'uploading');
   const isSendDisabled =
@@ -230,12 +198,12 @@ export function Chat({
   const uploadedFiles = attachments
     .filter((a) => a.status === 'success' && a.storageFile)
     .map((a) => ({
-      id: a.storageFile!.id,
-      file: a.storageFile!.file,
-      url: a.storageFile!.url,
-      originalName: a.storageFile!.originalName ?? a.file.name,
-      mimetype: a.storageFile!.mimetype ?? a.file.type,
-      size: a.storageFile!.size ?? a.file.size,
+      id: a.storageFile?.id,
+      file: a.storageFile?.file,
+      url: a.storageFile?.url,
+      originalName: a.storageFile?.originalName ?? a.file.name,
+      mimetype: a.storageFile?.mimetype ?? a.file.type,
+      size: a.storageFile?.size ?? a.file.size,
     }));
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -376,7 +344,7 @@ export function Chat({
         await fetch(`${stream.apiUrl}/contexts/file/${attachment.storageFile.id}`, {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${clientSecret}`,
+            'Authorization': `Bearer ${effectiveClientSecret}`,
           },
         });
       } catch {
@@ -519,13 +487,13 @@ export function Chat({
     stream.error instanceof Error ? stream.error.message : undefined;
 
   return (
-    <div
+    <div ref={viewportRef}
       className={cn(
         'flex h-full w-full flex-col flex-1 overflow-y-auto bg-background shadow-sm',
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b px-6 py-2 sticky top-0 z-10 bg-background">
+      <div className="flex items-center justify-between border-b px-4 py-2 sticky top-0 z-10 bg-background">
         <div className="flex items-center gap-3">
           <div className="h-2 w-2 rounded-full bg-green-500"></div>
           <div>
@@ -564,7 +532,7 @@ export function Chat({
         )}
       </div>
 
-      <div ref={viewportRef} className="px-6 py-4">
+      <div className="flex-1 p-4">
         {errorMessage && (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {errorMessage}
@@ -575,7 +543,7 @@ export function Chat({
             {historyError}
           </div>
         )}
-        {missingConfig && (
+        {showMissingConfig && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             {t('chat.missingConfigDetail')}
           </div>
@@ -614,7 +582,7 @@ export function Chat({
                       : 'justify-start -ml-1',  // AI messages: slightly closer to left
                   )}
                 >
-                  <div className="flex flex-col overflow-hidden">
+                  <div className="flex flex-col px-2 overflow-hidden">
                     <div
                       className={cn(
                         'max-w-full rounded-2xl',
@@ -653,13 +621,13 @@ export function Chat({
                             message.content.map((part, partIndex) => (
                               <p
                                 key={`${part.type}-${partIndex}`}
-                                className="break-words text-sm leading-relaxed"
+                                className="wrap-break-word text-sm leading-relaxed"
                               >
                                 {formatMessageContent(part as any)}
                               </p>
                             ))
                           ) : (
-                            <span className="break-words text-sm leading-relaxed">
+                            <span className="wrap-break-word text-sm leading-relaxed">
                               {formatMessageContent(message.content)}
                             </span>
                           )}
@@ -743,7 +711,7 @@ export function Chat({
 
                 {/* File name */}
                 <span className={cn(
-                  "max-w-[120px] truncate",
+                  "max-w-30 truncate",
                   item.status === 'error' && 'text-destructive'
                 )}>
                   {item.file.name}
@@ -799,7 +767,7 @@ export function Chat({
           {/* Capsule-shaped input container */}
           <div
             className={cn(
-              'flex flex-1 items-center gap-1 rounded-full',
+              'flex flex-1 items-center gap-1 rounded-xl',
               'bg-background border border-border shadow-sm',
               'pl-1.5 pr-1.5 py-1',
               'focus-within:border-muted-foreground/30 focus-within:shadow-md',
@@ -821,7 +789,7 @@ export function Chat({
               placeholder={inputPlaceholder}
               disabled={stream.isLoading || missingConfig || isHistoryLoading}
               className={cn(
-                'flex-1 bg-transparent text-sm text-foreground outline-none px-2',
+                'flex-1 bg-transparent text-sm text-foreground outline-none pr-2',
                 'placeholder:text-muted-foreground',
                 'disabled:cursor-not-allowed disabled:opacity-50'
               )}
