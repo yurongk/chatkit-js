@@ -14,8 +14,7 @@ export default defineConfig({
     rollupOptions: {
       external: (id) =>
         id.startsWith('@a2ui/lit') ||
-        id.startsWith('@langchain/core') ||
-        id.startsWith('@langchain/langgraph-sdk'),
+        id.startsWith('@langchain/core'),
     },
     sourcemap: true,
     minify: false,
