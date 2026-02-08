@@ -9,6 +9,7 @@ import type {
   TMessageContentMemory,
   TMessageContentReasoning,
   TMessageContentText,
+  TMessageComponentStep,
 } from '@xpert-ai/chatkit-types';
 import { ChevronDown, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
@@ -136,7 +137,7 @@ function MemoryBlock({ content }: { content: TMessageContentMemory }) {
   );
 }
 
-function ComponentBlock({ content }: { content: TMessageContentComponent<{title?: string; status?: string; message?: string; output?: string; data: unknown; input?: string}> }) {
+function ComponentBlock({ content }: { content: TMessageContentComponent<TMessageComponentStep> }) {
   const [isExpanded, setIsExpanded] = React.useState(false);
   
   const data = content.data ?? {}
@@ -150,7 +151,8 @@ function ComponentBlock({ content }: { content: TMessageContentComponent<{title?
   const status = typeof data.status === 'string' ? data.status as 'success' | 'fail' | 'running' : null;
   const message = typeof data.message === 'string' ? data.message : null;
   const output = typeof data.output === 'string' ? data.output : null;
-  const fallback = message ?? output ?? safeJson(data.data ?? data.input ?? data);
+  const error = data.error || null;
+  const fallback = message ?? output ?? safeJson(data.data ?? data);
 
   const config = status ? statusConfig[status] : null;
   const StatusIcon = config?.icon;
@@ -181,7 +183,13 @@ function ComponentBlock({ content }: { content: TMessageContentComponent<{title?
           {data.input && (
             <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(data.input, null, 2)}</pre>
           )}
-          <pre className="whitespace-pre-wrap wrap-break-word">{fallback}</pre>
+          {error ? (
+            <pre className="whitespace-pre-wrap wrap-break-word text-destructive">{typeof error === 'string' ? error : safeJson(error)}</pre>
+          ) : (
+            output && (
+              <pre className="whitespace-pre-wrap wrap-break-word">{fallback}</pre>
+            )
+          )}
         </CardContent>
       )}
     </Card>
