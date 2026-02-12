@@ -582,7 +582,7 @@ export function Chat({
                       : 'justify-start -ml-1',  // AI messages: slightly closer to left
                   )}
                 >
-                  <div className="flex flex-col px-2 overflow-hidden">
+                  <div className="flex flex-col px-2 overflow-visible">
                     <div
                       className={cn(
                         'max-w-full rounded-2xl',
