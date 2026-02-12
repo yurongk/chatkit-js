@@ -139,13 +139,13 @@ const defaultComponents: any = {
   ),
   ul: ({ className, ...props }: { className?: string }) => (
     <ul
-      className={cn("my-5 ml-6 list-disc [&>li]:mt-2", className)}
+      className={cn("my-5 list-outside list-disc pl-6 [&>li]:mt-2", className)}
       {...props}
     />
   ),
   ol: ({ className, ...props }: { className?: string }) => (
     <ol
-      className={cn("my-5 ml-6 list-decimal [&>li]:mt-2", className)}
+      className={cn("my-5 list-outside list-decimal pl-7 [&>li]:mt-2", className)}
       {...props}
     />
   ),
