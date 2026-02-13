@@ -145,7 +145,7 @@ const defaultComponents: any = {
   ),
   ol: ({ className, ...props }: { className?: string }) => (
     <ol
-      className={cn("my-5 list-outside list-decimal pl-7 [&>li]:mt-2", className)}
+      className={cn("my-5 list-outside list-decimal pl-8 [&>li]:mt-2", className)}
       {...props}
     />
   ),
@@ -200,7 +200,7 @@ const defaultComponents: any = {
   pre: ({ className, ...props }: { className?: string }) => (
     <pre
       className={cn(
-        "max-w-4xl overflow-x-auto rounded-lg bg-black text-white",
+        "max-w-4xl overflow-x-auto rounded-lg text-sm bg-black text-white dark:bg-zinc-800 ",
         className,
       )}
       {...props}
