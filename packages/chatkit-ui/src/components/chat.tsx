@@ -836,7 +836,7 @@ export function Chat({
 
         <div className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <span>{t('chat.poweredBy')}</span>
-          <ContextUsageIndicator className="absolute right-4" fallbackApiKey={clientSecret} />
+          <ContextUsageIndicator className="absolute right-4" />
         </div>
       </div>
     </div>

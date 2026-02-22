@@ -35,7 +35,7 @@
     "@xpert-ai/a2ui-react": "workspace:~",
     "@xpert-ai/chatkit-types": "workspace:~",
     "@xpert-ai/chatkit-web-shared": "workspace:~",
-    "@xpert-ai/xpert-sdk": "^0.0.2",
+    "@xpert-ai/xpert-sdk": "^0.0.3",
     "@fontsource-variable/inter": "^5.2.8",
     "@tailwindcss/vite": "^4.1.17",
     "class-variance-authority": "^0.7.1",
