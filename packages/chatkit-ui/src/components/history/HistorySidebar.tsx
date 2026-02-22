@@ -11,19 +11,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '../ui/sheet';
+import type { ThreadItem } from '../../hooks/useThreads';
 
-export type ThreadItem = {
-  /**
-   * Thread ID
-   */
-  id: string;
-  /**
-   * Conversation record ID
-   */
-  recordId: string;
-  title: string;
-  lastMessageAt?: Date;
-};
+
 
 export type HistorySidebarProps = {
   threads?: ThreadItem[];

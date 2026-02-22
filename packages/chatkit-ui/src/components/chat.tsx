@@ -483,8 +483,19 @@ export function Chat({
         .join(',')
     : undefined;
 
+  const currentThread = React.useMemo(
+    () => threads.find((item) => item.id === stream.threadId),
+    [threads, stream.threadId],
+  );
+
   const errorMessage =
     stream.error instanceof Error ? stream.error.message : undefined;
+
+  const threadErrorMessage = React.useMemo(() => {
+    if (currentThread?.status !== 'error') return undefined;
+    const message = currentThread.error?.trim();
+    return message || t('thread.errorToast');
+  }, [currentThread, t]);
 
   return (
     <div ref={viewportRef}
@@ -677,6 +688,11 @@ export function Chat({
       </div>
 
       <div className="p-2 sticky bottom-0 z-10 bg-background">
+        {threadErrorMessage && (
+          <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {threadErrorMessage}
+          </div>
+        )}
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
