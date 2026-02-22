@@ -119,10 +119,33 @@ pnpm lint
 
 ## Publish
 
-To publish a specific package (like `@xpert-ai/chatkit-vue`), run:
+This repo uses **Changesets + GitHub Actions** for automated npm publishing.
+
+### One-time setup
+
+1. Add `NPM_TOKEN` in GitHub repo secrets (Settings -> Secrets and variables -> Actions).
+2. Ensure Actions has permission to create pull requests (used by `.github/workflows/release.yml`).
+
+### Release flow
+
+1. Make package changes in a feature branch.
+2. Add a changeset:
 
 ```bash
-pnpm -r publish --filter @xpert-ai/chatkit-vue... --access public
+pnpm changeset
+```
+
+3. Commit and merge into `main`.
+4. GitHub Action `Release` will run on `main` push:
+   - Create/update a Release PR with version bumps and changelogs.
+   - After the Release PR is merged, publish packages to npm automatically.
+
+### Manual fallback (optional)
+
+If you need to publish manually:
+
+```bash
+pnpm build && pnpm changeset publish
 ```
 
 ## 📚 Learn More
