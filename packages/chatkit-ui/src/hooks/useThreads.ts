@@ -1,8 +1,5 @@
 import * as React from 'react';
-
-import type { ChatConversation as ThreadRecord } from '@xpert-ai/xpert-sdk';
-
-import type { ThreadItem } from '../components/history/HistorySidebar';
+import type { ChatConversationStatus, ChatConversation as ThreadRecord } from '@xpert-ai/xpert-sdk';
 import { useStreamContext } from '../providers/Stream';
 import { i18n, initI18n } from '../i18n';
 
@@ -25,6 +22,21 @@ type UseThreadsResult = {
     payload: Partial<ThreadRecord>,
   ) => Promise<ThreadRecord>;
   deleteThread: (recordId: string) => Promise<void>;
+};
+
+export type ThreadItem = {
+  /**
+   * Thread ID
+   */
+  id: string;
+  /**
+   * Conversation record ID
+   */
+  recordId: string;
+  title: string;
+  status: ChatConversationStatus;
+  error?: string;
+  lastMessageAt?: Date;
 };
 
 const DEFAULT_LIMIT = 50;
@@ -50,6 +62,8 @@ const toThreadItem = (threadRecord: ThreadRecord): ThreadItem => ({
   id: threadRecord.threadId ?? threadRecord.id,
   recordId: threadRecord.id,
   title: getThreadTitle(threadRecord),
+  status: threadRecord.status || 'idle',
+  error: threadRecord.error,
   lastMessageAt: toDate(threadRecord.updatedAt),
 });
 
@@ -62,7 +76,13 @@ const sortThreadRecords = (threadRecords: ThreadRecord[]): ThreadRecord[] => {
 };
 
 export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
-  const { client, threadId, assistantId, isReady } = useStreamContext();
+  const {
+    client,
+    threadId,
+    assistantId,
+    isReady,
+    isLoading: isStreamLoading,
+  } = useStreamContext();
   const [threadRecords, setThreadRecords] = React.useState<ThreadRecord[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<unknown>(null);
@@ -133,19 +153,48 @@ export function useThreads(limit: number = DEFAULT_LIMIT): UseThreadsResult {
   }, [refreshThreads, isReady]);
 
   React.useEffect(() => {
-    if (!isReady) return;
-    if (!threadId) return;
-    if (threadRecords.some((item) => item.threadId === threadId)) return;
+    if (!threadId || !isStreamLoading) return;
+
+    const now = new Date().toISOString();
+    setThreadRecords((prev) => {
+      let changed = false;
+      const next = prev.map((item) => {
+        const isCurrentThread =
+          item.threadId === threadId || item.id === threadId;
+        if (!isCurrentThread) return item;
+        if (item.status === 'busy' && !item.error) return item;
+        changed = true;
+        return {
+          ...item,
+          status: 'busy',
+          error: undefined,
+          updatedAt: now,
+        };
+      });
+      return changed ? sortThreadRecords(next) : prev;
+    });
+  }, [threadId, isStreamLoading]);
+
+  React.useEffect(() => {
+    if (!isReady || !threadId || isStreamLoading) return;
+
+    let cancelled = false;
+
     void client.conversations
       .search({ where: { threadId }, limit: 1 })
       .then((result) => {
+        if (cancelled) return;
         const found = result.items?.[0];
         if (found) upsertThreadRecord(found);
       })
       .catch((err) => {
-        setError(err);
+        if (!cancelled) setError(err);
       });
-  }, [client, threadId, threadRecords, upsertThreadRecord, isReady]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, threadId, upsertThreadRecord, isReady, isStreamLoading]);
 
   const threads = React.useMemo(
     () => threadRecords.map((threadRecord) => toThreadItem(threadRecord)),
