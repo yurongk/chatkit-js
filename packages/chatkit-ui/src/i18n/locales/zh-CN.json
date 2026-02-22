@@ -14,6 +14,9 @@
       "loadMessages": "加载线程消息失败",
       "createThread": "创建线程失败",
       "deleteThread": "删除线程失败"
+    },
+    "contextUsage": {
+      "label": "上下文"
     }
   },
   "history": {

@@ -17,6 +17,7 @@ import { StartScreen } from './thread/StartScreen';
 import { useStreamManager } from '../hooks/useStream';
 import { useThreads } from '../hooks/useThreads';
 import { useChatkitTranslation } from '../i18n/useChatkitTranslation';
+import { ContextUsageIndicator } from './thread/context-usage-indicator';
 
 export type ChatProps = {
   className?: string;
@@ -833,9 +834,10 @@ export function Chat({
           </p>
         )}
 
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          {t('chat.poweredBy')}
-        </p>
+        <div className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <span>{t('chat.poweredBy')}</span>
+          <ContextUsageIndicator className="absolute right-4" fallbackApiKey={clientSecret} />
+        </div>
       </div>
     </div>
   );

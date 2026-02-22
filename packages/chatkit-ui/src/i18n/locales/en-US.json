@@ -14,6 +14,9 @@
       "loadMessages": "Failed to load thread messages",
       "createThread": "Failed to create thread",
       "deleteThread": "Failed to delete thread"
+    },
+    "contextUsage": {
+      "label": "Context"
     }
   },
   "history": {
