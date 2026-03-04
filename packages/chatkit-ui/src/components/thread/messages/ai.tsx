@@ -26,11 +26,6 @@ export type AssistantMessageProps = {
   isStreaming?: boolean;
 };
 
-type RenderableComponentData =
-  | TMessageComponentStep
-  | TMessageComponentWidgetData
-  | Record<string, unknown>;
-
 function isTextContent(content: TMessageContentComplex): content is TMessageContentText {
   return content.type === 'text';
 }
@@ -43,9 +38,7 @@ function isImageContent(content: TMessageContentComplex): content is MessageCont
   return content.type === 'image_url';
 }
 
-function isComponentContent(
-  content: TMessageContentComplex,
-): content is TMessageContentComponent<RenderableComponentData> {
+function isComponentContent(content: TMessageContentComplex): content is TMessageContentComponent {
   return content.type === 'component';
 }
 
@@ -66,10 +59,10 @@ const statusConfig = {
 };
 
 function isWidgetComponent(
-  content: TMessageContentComponent<RenderableComponentData>,
+  content: TMessageContentComponent,
 ): content is TMessageContentComponent<TMessageComponentWidgetData> {
-  const data = asRecord(content.data);
-  return data?.['type'] === 'Widget' && Array.isArray(data['widgets']);
+  const data = content.data as TMessageComponentWidgetData | undefined;
+  return data?.type === 'Widget' && Array.isArray(data.widgets);
 }
 
 function isMemoryContent(content: TMessageContentComplex): content is TMessageContentMemory {
@@ -82,13 +75,6 @@ function safeJson(value: unknown) {
   } catch {
     return String(value);
   }
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-  return value as Record<string, unknown>;
 }
 
 function ReasoningBlock({ reasoning }: { reasoning: TMessageContentReasoning[] }) {
@@ -151,46 +137,22 @@ function MemoryBlock({ content }: { content: TMessageContentMemory }) {
   );
 }
 
-function ComponentBlock({
-  content,
-}: {
-  content: TMessageContentComponent<RenderableComponentData>;
-}) {
+function ComponentBlock({ content }: { content: TMessageContentComponent<TMessageComponentStep> }) {
   const [isExpanded, setIsExpanded] = React.useState(false);
-
-  const data = asRecord(content.data);
-  const category = typeof data?.['category'] === 'string' ? data['category'] : 'Component';
-  const tool =
-    typeof data?.['tool'] === 'string' && data['tool'].trim()
-      ? data['tool']
-      : null;
+  
+  const data = content.data ?? {}
   const title =
-    tool && category === 'Tool'
-      ? tool
-      : typeof data?.['title'] === 'string'
-      ? data['title']
-      : typeof data?.['type'] === 'string'
-        ? data['type']
+    typeof data.title === 'string'
+      ? data.title
+      : typeof data.type === 'string'
+        ? data.type
         : 'Component';
-  const statusValue = data?.['status'];
-  const status =
-    statusValue === 'success' || statusValue === 'fail' || statusValue === 'running'
-      ? statusValue
-      : null;
-  const message = typeof data?.['message'] === 'string' ? data['message'] : null;
-  const nestedData = asRecord(data?.['data']);
-  const nestedOutputValue = nestedData?.['output'];
-  const nestedOutput = typeof nestedOutputValue === 'string' ? nestedOutputValue : null;
-  const output = typeof data?.['output'] === 'string' ? data['output'] : nestedOutput;
-  const error = data?.['error'] ?? null;
-  const fallback = message ?? output ?? safeJson(data?.['data'] ?? data ?? {});
-  const hasContent = message !== null || output !== null;
-
-  // Auto-expand when running with output available
-  const shouldAutoExpand = status === 'running' && output !== null;
-  React.useEffect(() => {
-    if (shouldAutoExpand) setIsExpanded(true);
-  }, [shouldAutoExpand]);
+  const category = typeof data.category === 'string' ? data.category : 'Component';
+  const status = typeof data.status === 'string' ? data.status as 'success' | 'fail' | 'running' : null;
+  const message = typeof data.message === 'string' ? data.message : null;
+  const output = typeof data.output === 'string' ? data.output : null;
+  const error = data.error || null;
+  const fallback = message ?? output ?? safeJson(data.data ?? data);
 
   const config = status ? statusConfig[status] : null;
   const StatusIcon = config?.icon;
@@ -217,49 +179,20 @@ function ComponentBlock({
         </div>
       </CardHeader>
       {isExpanded && (
-        <ComponentBlockContent data={data} status={status} output={output} error={error} fallback={fallback} hasContent={hasContent} />
+        <CardContent className="text-xs text-muted-foreground max-h-60 overflow-auto">
+          {data.input && (
+            <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(data.input, null, 2)}</pre>
+          )}
+          {error ? (
+            <pre className="whitespace-pre-wrap wrap-break-word text-destructive">{typeof error === 'string' ? error : safeJson(error)}</pre>
+          ) : (
+            output && (
+              <pre className="whitespace-pre-wrap wrap-break-word">{fallback}</pre>
+            )
+          )}
+        </CardContent>
       )}
     </Card>
-  );
-}
-
-function ComponentBlockContent({
-  data,
-  status,
-  output,
-  error,
-  fallback,
-  hasContent,
-}: {
-  data: Record<string, unknown> | null;
-  status: string | null;
-  output: string | null;
-  error: unknown;
-  fallback: string;
-  hasContent: boolean;
-}) {
-  const contentRef = React.useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to bottom when output updates during running
-  React.useEffect(() => {
-    if (status === 'running' && contentRef.current) {
-      contentRef.current.scrollTop = contentRef.current.scrollHeight;
-    }
-  }, [status, output]);
-
-  return (
-    <CardContent ref={contentRef} className="text-xs text-muted-foreground max-h-60 overflow-auto">
-      {Boolean(data?.['input']) && (
-        <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(data?.['input'], null, 2)}</pre>
-      )}
-      {error ? (
-        <pre className="whitespace-pre-wrap wrap-break-word text-destructive">{typeof error === 'string' ? error : safeJson(error)}</pre>
-      ) : (
-        hasContent && (
-          <pre className="whitespace-pre-wrap wrap-break-word">{fallback}</pre>
-        )
-      )}
-    </CardContent>
   );
 }
 
