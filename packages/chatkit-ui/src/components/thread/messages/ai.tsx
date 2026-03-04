@@ -61,7 +61,7 @@ const statusConfig = {
 function isWidgetComponent(
   content: TMessageContentComponent,
 ): content is TMessageContentComponent<TMessageComponentWidgetData> {
-  const data = content.data as TMessageComponentWidgetData | undefined;
+  const data = content.data as Record<string, unknown> | undefined;
   return data?.type === 'Widget' && Array.isArray(data.widgets);
 }
 
@@ -137,22 +137,37 @@ function MemoryBlock({ content }: { content: TMessageContentMemory }) {
   );
 }
 
-function ComponentBlock({ content }: { content: TMessageContentComponent<TMessageComponentStep> }) {
+/** Partial step data: during streaming, fields arrive incrementally */
+type PartialStepData = Partial<TMessageComponentStep & { category?: string }>;
+
+function ComponentBlock({ content }: { content: TMessageContentComponent }) {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  
-  const data = content.data ?? {}
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  const data = (content.data ?? {}) as PartialStepData;
+  const category = data.category ?? 'Component';
   const title =
-    typeof data.title === 'string'
-      ? data.title
-      : typeof data.type === 'string'
-        ? data.type
-        : 'Component';
-  const category = typeof data.category === 'string' ? data.category : 'Component';
-  const status = typeof data.status === 'string' ? data.status as 'success' | 'fail' | 'running' : null;
-  const message = typeof data.message === 'string' ? data.message : null;
-  const output = typeof data.output === 'string' ? data.output : null;
-  const error = data.error || null;
+    data.tool && category === 'Tool'
+      ? data.tool
+      : data.title ?? data.type ?? 'Component';
+  const status = data.status ?? null;
+  const message = data.message ?? null;
+  const output = data.output ?? null;
+  const error = data.error ?? null;
   const fallback = message ?? output ?? safeJson(data.data ?? data);
+  const hasOutput = message !== null || output !== null;
+
+  // Auto-expand when running with output available
+  React.useEffect(() => {
+    if (status === 'running' && output !== null) setIsExpanded(true);
+  }, [status, output]);
+
+  // Auto-scroll to bottom when output updates during running
+  React.useEffect(() => {
+    if (status === 'running' && contentRef.current) {
+      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    }
+  }, [status, output]);
 
   const config = status ? statusConfig[status] : null;
   const StatusIcon = config?.icon;
@@ -179,14 +194,14 @@ function ComponentBlock({ content }: { content: TMessageContentComponent<TMessag
         </div>
       </CardHeader>
       {isExpanded && (
-        <CardContent className="text-xs text-muted-foreground max-h-60 overflow-auto">
+        <CardContent ref={contentRef} className="text-xs text-muted-foreground max-h-60 overflow-auto">
           {data.input && (
             <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(data.input, null, 2)}</pre>
           )}
           {error ? (
             <pre className="whitespace-pre-wrap wrap-break-word text-destructive">{typeof error === 'string' ? error : safeJson(error)}</pre>
           ) : (
-            output && (
+            hasOutput && (
               <pre className="whitespace-pre-wrap wrap-break-word">{fallback}</pre>
             )
           )}
