@@ -1,5 +1,11 @@
 # @xpert-ai/chatkit-ui
 
+## 0.0.15
+
+### Patch Changes
+
+- ca92d3a: Streaming bash
+
 ## 0.0.14
 
 ### Patch Changes
