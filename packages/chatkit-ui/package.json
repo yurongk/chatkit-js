@@ -84,8 +84,7 @@
     "clean": "rimraf dist"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": false
+    "access": "public"
   },
   "repository": {
     "type": "git",

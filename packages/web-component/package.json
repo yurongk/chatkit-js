@@ -21,8 +21,7 @@
     "custom-element"
   ],
   "publishConfig": {
-    "access": "public",
-    "provenance": false
+    "access": "public"
   },
   "repository": {
     "type": "git",
