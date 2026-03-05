@@ -78,7 +78,7 @@
     "build": "pnpm run build:lib && pnpm run build:app",
     "build:lib": "tsup src/index.ts --format esm,cjs --dts --clean",
     "build:app": "vite build",
-    "test": "vitest",
+    "test": "vitest run --passWithNoTests",
     "types": "tsc",
     "lint": "eslint .",
     "clean": "rimraf dist"
