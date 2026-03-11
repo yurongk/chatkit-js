@@ -8,6 +8,7 @@
     "loadingThread": "Loading thread...",
     "stop": "Stop",
     "send": "Send message",
+    "scrollToBottom": "Scroll to bottom",
     "retryUpload": "Retry upload",
     "poweredBy": "Powered by Xpert AI",
     "errors": {
