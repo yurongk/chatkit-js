@@ -13,6 +13,7 @@ import type {
 } from '@xpert-ai/chatkit-types';
 import { ChevronDown, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
+import { isNearBottom } from '../../../lib/scroll';
 import { cn } from '../../../lib/utils';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
@@ -143,6 +144,8 @@ type PartialStepData = Partial<TMessageComponentStep & { category?: string }>;
 function ComponentBlock({ content }: { content: TMessageContentComponent }) {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const contentRef = React.useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = React.useRef(true);
+  const previousScrollTopRef = React.useRef(0);
 
   const data = (content.data ?? {}) as PartialStepData;
   const category = data.category ?? 'Component';
@@ -162,12 +165,46 @@ function ComponentBlock({ content }: { content: TMessageContentComponent }) {
     if (status === 'running' && output !== null) setIsExpanded(true);
   }, [status, output]);
 
-  // Auto-scroll to bottom when output updates during running
   React.useEffect(() => {
-    if (status === 'running' && contentRef.current) {
-      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    const element = contentRef.current;
+    if (!element) return;
+
+    previousScrollTopRef.current = element.scrollTop;
+
+    const updateAutoScrollState = () => {
+      const nextScrollTop = element.scrollTop;
+      const isScrollingUp = nextScrollTop < previousScrollTopRef.current - 1;
+      previousScrollTopRef.current = nextScrollTop;
+
+      if (isScrollingUp) {
+        shouldAutoScrollRef.current = false;
+        return;
+      }
+
+      shouldAutoScrollRef.current = isNearBottom(element);
+    };
+
+    updateAutoScrollState();
+    element.addEventListener('scroll', updateAutoScrollState, { passive: true });
+
+    return () => {
+      element.removeEventListener('scroll', updateAutoScrollState);
+    };
+  }, [isExpanded]);
+
+  React.useEffect(() => {
+    if (status !== 'running') {
+      shouldAutoScrollRef.current = true;
+      return;
     }
-  }, [status, output]);
+
+    const element = contentRef.current;
+    if (!element || !shouldAutoScrollRef.current) {
+      return;
+    }
+
+    element.scrollTop = element.scrollHeight;
+  }, [isExpanded, output, status]);
 
   const config = status ? statusConfig[status] : null;
   const StatusIcon = config?.icon;
