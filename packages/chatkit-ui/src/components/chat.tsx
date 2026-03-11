@@ -5,6 +5,7 @@ import type { Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
 
 import { cn, createMessageId } from '../lib/utils';
+import { isNearBottom } from '../lib/scroll';
 import { type StorageFile, type UploadingFile } from '../lib/types';
 import { useStreamContext } from '../providers/Stream';
 import { ComposerMenu } from './composer/ComposerMenu';
@@ -130,6 +131,10 @@ export function Chat({
   } = useThreads();
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const shouldAutoScrollRef = React.useRef(true);
+  const previousMessageCountRef = React.useRef(0);
+  const previousScrollTopRef = React.useRef(0);
+  const autoScrollFrameRef = React.useRef<number | null>(null);
 
   const resolvedTitle = title ?? t('chat.title');
   const resolvedPlaceholder = placeholder ?? t('chat.placeholder');
@@ -138,30 +143,84 @@ export function Chat({
   const inputPlaceholder =
     selectedTool?.placeholderOverride ?? composer?.placeholder ?? resolvedPlaceholder;
 
-  const messages = stream.messages ?? [];
+  const messages = React.useMemo(() => stream.messages ?? [], [stream.messages]);
   const trimmedDraft = draft.trim();
 
-  const scrollToBottom = React.useCallback((smooth = false) => {
+  const cancelPendingAutoScroll = React.useCallback(() => {
+    if (autoScrollFrameRef.current !== null) {
+      cancelAnimationFrame(autoScrollFrameRef.current);
+      autoScrollFrameRef.current = null;
+    }
+  }, []);
+
+  const scrollToBottom = React.useCallback((smooth = false, force = false) => {
+    if (force) {
+      shouldAutoScrollRef.current = true;
+    }
+
+    cancelPendingAutoScroll();
+
     // Use requestAnimationFrame to ensure DOM has updated
-    requestAnimationFrame(() => {
+    autoScrollFrameRef.current = requestAnimationFrame(() => {
+      autoScrollFrameRef.current = null;
+
       const viewport = viewportRef.current;
       if (viewport) {
+        if (!force && !shouldAutoScrollRef.current) {
+          return;
+        }
+
         viewport.scrollTo({
           top: viewport.scrollHeight,
           behavior: smooth ? 'smooth' : 'instant',
         });
       }
     });
-  }, []);
+  }, [cancelPendingAutoScroll]);
 
-  // Auto-scroll when messages change or during streaming
   React.useEffect(() => {
-    scrollToBottom();
-  }, [messages.length, scrollToBottom]);
+    const viewport = viewportRef.current;
+    if (!viewport) return;
 
-  // Also scroll when streaming content updates (for smooth following)
+    previousScrollTopRef.current = viewport.scrollTop;
+
+    const updateAutoScrollState = () => {
+      const nextScrollTop = viewport.scrollTop;
+      const isScrollingUp = nextScrollTop < previousScrollTopRef.current - 1;
+      previousScrollTopRef.current = nextScrollTop;
+
+      if (isScrollingUp) {
+        shouldAutoScrollRef.current = false;
+        cancelPendingAutoScroll();
+        return;
+      }
+
+      shouldAutoScrollRef.current = isNearBottom(viewport);
+    };
+
+    updateAutoScrollState();
+    viewport.addEventListener('scroll', updateAutoScrollState, { passive: true });
+
+    return () => {
+      cancelPendingAutoScroll();
+      viewport.removeEventListener('scroll', updateAutoScrollState);
+    };
+  }, [cancelPendingAutoScroll]);
+
   React.useEffect(() => {
-    if (stream.isLoading) {
+    shouldAutoScrollRef.current = true;
+    previousScrollTopRef.current = 0;
+  }, [stream.threadId]);
+
+  React.useEffect(() => {
+    const messageCountChanged = messages.length !== previousMessageCountRef.current;
+    previousMessageCountRef.current = messages.length;
+
+    if (!shouldAutoScrollRef.current) {
+      return;
+    }
+
+    if (messageCountChanged || stream.isLoading) {
       scrollToBottom();
     }
   }, [stream.isLoading, messages, scrollToBottom]);
@@ -243,7 +302,7 @@ export function Chat({
     );
 
     // Immediately scroll to bottom to show the new message
-    scrollToBottom(true);
+    scrollToBottom(true, true);
 
     // Clear selected tool if not persistent
     if (selectedTool && !selectedTool.pinned) {
@@ -380,7 +439,7 @@ export function Chat({
     );
 
     // Scroll to bottom to show the new message
-    scrollToBottom(true);
+    scrollToBottom(true, true);
   };
 
   const loadConversationMessages = React.useCallback(
