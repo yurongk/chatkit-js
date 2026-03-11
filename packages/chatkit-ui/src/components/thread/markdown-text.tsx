@@ -6,7 +6,14 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
-import { FC, memo, useState } from "react";
+import {
+  Children,
+  FC,
+  memo,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+  useState,
+} from "react";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { SyntaxHighlighter } from "./syntax-highlighter";
 
@@ -20,6 +27,22 @@ interface CodeHeaderProps {
   language?: string;
   code: string;
 }
+
+type MarkdownElementProps<T extends keyof JSX.IntrinsicElements> =
+  ComponentPropsWithoutRef<T> & {
+    node?: unknown;
+  };
+
+const getTextContent = (children: ReactNode) =>
+  Children.toArray(children)
+    .map((child) => {
+      if (typeof child === "string" || typeof child === "number") {
+        return String(child);
+      }
+
+      return "";
+    })
+    .join("");
 
 const useCopyToClipboard = ({
   copiedDuration = 3000,
@@ -63,7 +86,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
 };
 
 const defaultComponents: any = {
-  h1: ({ className, ...props }: { className?: string }) => (
+  h1: ({ className, node: _node, ...props }: MarkdownElementProps<"h1">) => (
     <h1
       className={cn(
         "mb-8 scroll-m-20 text-4xl font-extrabold tracking-tight last:mb-0",
@@ -72,7 +95,7 @@ const defaultComponents: any = {
       {...props}
     />
   ),
-  h2: ({ className, ...props }: { className?: string }) => (
+  h2: ({ className, node: _node, ...props }: MarkdownElementProps<"h2">) => (
     <h2
       className={cn(
         "mt-8 mb-4 scroll-m-20 text-3xl font-semibold tracking-tight first:mt-0 last:mb-0",
@@ -81,7 +104,7 @@ const defaultComponents: any = {
       {...props}
     />
   ),
-  h3: ({ className, ...props }: { className?: string }) => (
+  h3: ({ className, node: _node, ...props }: MarkdownElementProps<"h3">) => (
     <h3
       className={cn(
         "mt-6 mb-4 scroll-m-20 text-2xl font-semibold tracking-tight first:mt-0 last:mb-0",
@@ -90,7 +113,7 @@ const defaultComponents: any = {
       {...props}
     />
   ),
-  h4: ({ className, ...props }: { className?: string }) => (
+  h4: ({ className, node: _node, ...props }: MarkdownElementProps<"h4">) => (
     <h4
       className={cn(
         "mt-6 mb-4 scroll-m-20 text-xl font-semibold tracking-tight first:mt-0 last:mb-0",
@@ -99,7 +122,7 @@ const defaultComponents: any = {
       {...props}
     />
   ),
-  h5: ({ className, ...props }: { className?: string }) => (
+  h5: ({ className, node: _node, ...props }: MarkdownElementProps<"h5">) => (
     <h5
       className={cn(
         "my-4 text-lg font-semibold first:mt-0 last:mb-0",
@@ -108,19 +131,19 @@ const defaultComponents: any = {
       {...props}
     />
   ),
-  h6: ({ className, ...props }: { className?: string }) => (
+  h6: ({ className, node: _node, ...props }: MarkdownElementProps<"h6">) => (
     <h6
       className={cn("my-4 font-semibold first:mt-0 last:mb-0", className)}
       {...props}
     />
   ),
-  p: ({ className, ...props }: { className?: string }) => (
+  p: ({ className, node: _node, ...props }: MarkdownElementProps<"p">) => (
     <p
       className={cn("mt-5 mb-5 leading-7 first:mt-0 last:mb-0", className)}
       {...props}
     />
   ),
-  a: ({ className, ...props }: { className?: string }) => (
+  a: ({ className, node: _node, ...props }: MarkdownElementProps<"a">) => (
     <a
       className={cn(
         "text-primary font-medium underline underline-offset-4",
@@ -131,31 +154,42 @@ const defaultComponents: any = {
       {...props}
     />
   ),
-  blockquote: ({ className, ...props }: { className?: string }) => (
+  blockquote: ({
+    className,
+    node: _node,
+    ...props
+  }: MarkdownElementProps<"blockquote">) => (
     <blockquote
-      className={cn("border-l-2 pl-6 italic", className)}
+      className={cn(
+        "border-l-4 border-border pl-6 italic text-muted-foreground",
+        className,
+      )}
       {...props}
     />
   ),
-  ul: ({ className, ...props }: { className?: string }) => (
+  ul: ({ className, node: _node, ...props }: MarkdownElementProps<"ul">) => (
     <ul
       className={cn("my-5 list-outside list-disc pl-6 [&>li]:mt-2", className)}
       {...props}
     />
   ),
-  ol: ({ className, ...props }: { className?: string }) => (
+  ol: ({ className, node: _node, ...props }: MarkdownElementProps<"ol">) => (
     <ol
       className={cn("my-5 list-outside list-decimal pl-8 [&>li]:mt-2", className)}
       {...props}
     />
   ),
-  hr: ({ className, ...props }: { className?: string }) => (
+  hr: ({ className, node: _node, ...props }: MarkdownElementProps<"hr">) => (
     <hr
       className={cn("my-5 border-b", className)}
       {...props}
     />
   ),
-  table: ({ className, ...props }: { className?: string }) => (
+  table: ({
+    className,
+    node: _node,
+    ...props
+  }: MarkdownElementProps<"table">) => (
     <table
       className={cn(
         "my-5 w-full border-separate border-spacing-0 overflow-y-auto",
@@ -164,43 +198,43 @@ const defaultComponents: any = {
       {...props}
     />
   ),
-  th: ({ className, ...props }: { className?: string }) => (
+  th: ({ className, node: _node, ...props }: MarkdownElementProps<"th">) => (
     <th
       className={cn(
-        "bg-muted px-4 py-2 text-left font-bold first:rounded-tl-lg last:rounded-tr-lg [&[align=center]]:text-center [&[align=right]]:text-right",
+        "bg-muted border-border border-y border-l px-4 py-2 text-left font-bold first:rounded-tl-lg last:rounded-tr-lg last:border-r [&[align=center]]:text-center [&[align=right]]:text-right",
         className,
       )}
       {...props}
     />
   ),
-  td: ({ className, ...props }: { className?: string }) => (
+  td: ({ className, node: _node, ...props }: MarkdownElementProps<"td">) => (
     <td
       className={cn(
-        "border-b border-l px-4 py-2 text-left last:border-r [&[align=center]]:text-center [&[align=right]]:text-right",
+        "border-border border-b border-l px-4 py-2 text-left last:border-r [&[align=center]]:text-center [&[align=right]]:text-right",
         className,
       )}
       {...props}
     />
   ),
-  tr: ({ className, ...props }: { className?: string }) => (
+  tr: ({ className, node: _node, ...props }: MarkdownElementProps<"tr">) => (
     <tr
       className={cn(
-        "m-0 border-b p-0 first:border-t [&:last-child>td:first-child]:rounded-bl-lg [&:last-child>td:last-child]:rounded-br-lg",
+        "m-0 p-0 even:bg-muted/50 [&:last-child>td:first-child]:rounded-bl-lg [&:last-child>td:last-child]:rounded-br-lg",
         className,
       )}
       {...props}
     />
   ),
-  sup: ({ className, ...props }: { className?: string }) => (
+  sup: ({ className, node: _node, ...props }: MarkdownElementProps<"sup">) => (
     <sup
       className={cn("[&>a]:text-xs [&>a]:no-underline", className)}
       {...props}
     />
   ),
-  pre: ({ className, ...props }: { className?: string }) => (
-    <pre
+  pre: ({ className, node: _node, ...props }: MarkdownElementProps<"pre">) => (
+    <div
       className={cn(
-        "max-w-4xl overflow-x-auto rounded-lg text-sm bg-black text-white dark:bg-zinc-800 ",
+        "max-w-4xl overflow-x-auto rounded-lg text-sm bg-black text-white dark:bg-zinc-800",
         className,
       )}
       {...props}
@@ -209,36 +243,53 @@ const defaultComponents: any = {
   code: ({
     className,
     children,
+    node: _node,
     ...props
-  }: {
-    className?: string;
-    children: React.ReactNode;
-  }) => {
+  }: MarkdownElementProps<"code">) => {
     const match = /language-(\w+)/.exec(className || "");
+    const code = getTextContent(children);
+    const isBlockCode = code.includes("\n");
 
     if (match) {
       const language = match[1];
-      const code = String(children).replace(/\n$/, "");
+      const normalizedCode = code.replace(/\n$/, "");
 
       return (
         <>
           <CodeHeader
             language={language}
-            code={code}
+            code={normalizedCode}
           />
           <SyntaxHighlighter
             language={language}
             className={className}
           >
-            {code}
+            {normalizedCode}
           </SyntaxHighlighter>
         </>
       );
     }
 
+    if (isBlockCode) {
+      return (
+        <code
+          className={cn(
+            "block min-w-full whitespace-pre px-4 py-4 font-mono text-inherit",
+            className,
+          )}
+          {...props}
+        >
+          {code.replace(/\n$/, "")}
+        </code>
+      );
+    }
+
     return (
       <code
-        className={cn("rounded font-semibold", className)}
+        className={cn(
+          "bg-muted rounded px-1.5 py-0.5 font-mono text-[0.9em] font-semibold",
+          className,
+        )}
         {...props}
       >
         {children}
