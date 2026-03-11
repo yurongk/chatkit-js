@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { FileText, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
+import { ArrowDown, FileText, Loader2, Pencil, RefreshCw, X } from 'lucide-react';
 
 import type { Message } from '@xpert-ai/xpert-sdk';
 import type { ChatkitMessage, ChatKitOptions, ToolOption } from '@xpert-ai/chatkit-types';
@@ -19,6 +19,7 @@ import { useStreamManager } from '../hooks/useStream';
 import { useThreads } from '../hooks/useThreads';
 import { useChatkitTranslation } from '../i18n/useChatkitTranslation';
 import { ContextUsageIndicator } from './thread/context-usage-indicator';
+import { Button } from './ui/button';
 
 export type ChatProps = {
   className?: string;
@@ -123,6 +124,8 @@ export function Chat({
   const [draft, setDraft] = React.useState('');
   const [selectedTool, setSelectedTool] = React.useState<ToolOption | null>(null);
   const [attachments, setAttachments] = React.useState<UploadingFile[]>([]);
+  const [isAtBottom, setIsAtBottom] = React.useState(true);
+  const [hasUpdatesBelow, setHasUpdatesBelow] = React.useState(false);
   const {
     threads,
     deleteThread,
@@ -132,9 +135,12 @@ export function Chat({
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const shouldAutoScrollRef = React.useRef(true);
+  const forceFollowRef = React.useRef(false);
   const previousMessageCountRef = React.useRef(0);
   const previousScrollTopRef = React.useRef(0);
   const autoScrollFrameRef = React.useRef<number | null>(null);
+  const isPointerDownRef = React.useRef(false);
+  const lastTouchYRef = React.useRef<number | null>(null);
 
   const resolvedTitle = title ?? t('chat.title');
   const resolvedPlaceholder = placeholder ?? t('chat.placeholder');
@@ -153,9 +159,21 @@ export function Chat({
     }
   }, []);
 
+  const disableAutoFollow = React.useCallback(() => {
+    forceFollowRef.current = false;
+    shouldAutoScrollRef.current = false;
+    cancelPendingAutoScroll();
+  }, [cancelPendingAutoScroll]);
+
+  const enableAutoFollow = React.useCallback(() => {
+    forceFollowRef.current = true;
+    shouldAutoScrollRef.current = true;
+    setHasUpdatesBelow(false);
+  }, []);
+
   const scrollToBottom = React.useCallback((smooth = false, force = false) => {
     if (force) {
-      shouldAutoScrollRef.current = true;
+      enableAutoFollow();
     }
 
     cancelPendingAutoScroll();
@@ -176,40 +194,104 @@ export function Chat({
         });
       }
     });
-  }, [cancelPendingAutoScroll]);
+  }, [cancelPendingAutoScroll, enableAutoFollow]);
 
   React.useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
 
     previousScrollTopRef.current = viewport.scrollTop;
+    const stopPointerTracking = () => {
+      isPointerDownRef.current = false;
+    };
 
     const updateAutoScrollState = () => {
       const nextScrollTop = viewport.scrollTop;
       const isScrollingUp = nextScrollTop < previousScrollTopRef.current - 1;
       previousScrollTopRef.current = nextScrollTop;
+      const nearBottom = isNearBottom(viewport);
+      setIsAtBottom(nearBottom);
 
-      if (isScrollingUp) {
-        shouldAutoScrollRef.current = false;
-        cancelPendingAutoScroll();
+      if (nearBottom) {
+        shouldAutoScrollRef.current = true;
+        setHasUpdatesBelow(false);
         return;
       }
 
-      shouldAutoScrollRef.current = isNearBottom(viewport);
+      if (forceFollowRef.current) {
+        shouldAutoScrollRef.current = true;
+        return;
+      }
+
+      if (isPointerDownRef.current && isScrollingUp) {
+        disableAutoFollow();
+        return;
+      }
+
+      shouldAutoScrollRef.current = false;
+    };
+
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0) {
+        disableAutoFollow();
+      }
+    };
+
+    const handlePointerDown = () => {
+      isPointerDownRef.current = true;
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      lastTouchYRef.current = event.touches[0]?.clientY ?? null;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const nextTouchY = event.touches[0]?.clientY;
+      if (typeof nextTouchY !== 'number') return;
+
+      if (
+        lastTouchYRef.current !== null &&
+        nextTouchY > lastTouchYRef.current + 1
+      ) {
+        disableAutoFollow();
+      }
+
+      lastTouchYRef.current = nextTouchY;
+    };
+
+    const handleTouchEnd = () => {
+      lastTouchYRef.current = null;
     };
 
     updateAutoScrollState();
+    viewport.addEventListener('wheel', handleWheel, { passive: true });
+    viewport.addEventListener('pointerdown', handlePointerDown, { passive: true });
     viewport.addEventListener('scroll', updateAutoScrollState, { passive: true });
+    viewport.addEventListener('touchstart', handleTouchStart, { passive: true });
+    viewport.addEventListener('touchmove', handleTouchMove, { passive: true });
+    viewport.addEventListener('touchend', handleTouchEnd, { passive: true });
+    window.addEventListener('pointerup', stopPointerTracking, { passive: true });
+    window.addEventListener('pointercancel', stopPointerTracking, { passive: true });
 
     return () => {
       cancelPendingAutoScroll();
+      viewport.removeEventListener('wheel', handleWheel);
+      viewport.removeEventListener('pointerdown', handlePointerDown);
       viewport.removeEventListener('scroll', updateAutoScrollState);
+      viewport.removeEventListener('touchstart', handleTouchStart);
+      viewport.removeEventListener('touchmove', handleTouchMove);
+      viewport.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('pointerup', stopPointerTracking);
+      window.removeEventListener('pointercancel', stopPointerTracking);
     };
-  }, [cancelPendingAutoScroll]);
+  }, [cancelPendingAutoScroll, disableAutoFollow]);
 
   React.useEffect(() => {
     shouldAutoScrollRef.current = true;
+    forceFollowRef.current = false;
     previousScrollTopRef.current = 0;
+    setIsAtBottom(true);
+    setHasUpdatesBelow(false);
   }, [stream.threadId]);
 
   React.useEffect(() => {
@@ -217,6 +299,9 @@ export function Chat({
     previousMessageCountRef.current = messages.length;
 
     if (!shouldAutoScrollRef.current) {
+      if (messageCountChanged || stream.isLoading) {
+        setHasUpdatesBelow(true);
+      }
       return;
     }
 
@@ -533,6 +618,7 @@ export function Chat({
           },
         },
       );
+      scrollToBottom(true, true);
     }
   };
 
@@ -560,7 +646,7 @@ export function Chat({
   return (
     <div ref={viewportRef}
       className={cn(
-        'flex h-full w-full flex-col flex-1 overflow-y-auto bg-background shadow-sm',
+        'relative flex h-full w-full flex-col flex-1 overflow-y-auto bg-background shadow-sm',
         className,
       )}
     >
@@ -746,6 +832,25 @@ export function Chat({
           </div>
         )}
       </div>
+
+      {!isAtBottom && messages.length > 0 && (
+        <div className="sticky bottom-20 z-20 flex justify-center px-4 pointer-events-none">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant={hasUpdatesBelow ? 'default' : 'outline'}
+            className={cn(
+              'pointer-events-auto rounded-full shadow-md dark:border-white/20 dark:ring-1 dark:ring-white/15 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_10px_30px_rgba(0,0,0,0.45)]',
+              hasUpdatesBelow && 'animate-bounce'
+            )}
+            onClick={() => scrollToBottom(true, true)}
+            aria-label={t('chat.scrollToBottom')}
+            title={t('chat.scrollToBottom')}
+          >
+            <ArrowDown size={16} />
+          </Button>
+        </div>
+      )}
 
       <div className="p-2 sticky bottom-0 z-10 bg-background">
         {threadErrorMessage && (
