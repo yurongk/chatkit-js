@@ -286,3 +286,23 @@ export type TClientEeffectMessage = {
   agentKey?: string;
   created_date?: Date | string
 }
+
+// Thread context usage
+export type TThreadContextUsageMetrics = {
+  contextTokens: number
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  embedTokens?: number
+  totalPrice?: number
+  currency?: string | null
+}
+
+export type TThreadContextUsageEvent = {
+  type: 'thread_context_usage'
+  threadId: string
+  runId: string | null
+  agentKey: string
+  updatedAt: string
+  usage: TThreadContextUsageMetrics
+}

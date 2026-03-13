@@ -18,7 +18,7 @@ import {
 } from '@xpert-ai/xpert-sdk';
 import type { Message } from '@langchain/core/messages';
 import { type ToolCall } from '@langchain/core/messages/tool';
-import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent, type ChatEventEnvelope, type TMessageContentComplex, type TMessageContentComponent } from '@xpert-ai/chatkit-types';
+import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent, type ChatEventEnvelope, type TMessageContentComplex, type TMessageContentComponent, type TThreadContextUsageEvent } from '@xpert-ai/chatkit-types';
 import { appendMessageContent } from '../lib/message';
 import { useParentMessenger } from '../hooks/useParentMessenger';
 import type { ParentMessenger } from './ParentMessenger';
@@ -29,6 +29,11 @@ import {
   type LangGraphEventState,
 } from './langGraphEventMapper';
 import { createMessageId } from '../lib/utils';
+import {
+  applyThreadContextUsageEvent,
+  parseThreadContextUsageEvent,
+  type ThreadContextUsageByAgentKey,
+} from '../lib/thread-context-usage';
 
 type ChatKitAIMessage = Message & { executionId?: string };
 
@@ -55,6 +60,7 @@ export type StreamContextType = {
   assistantId: string;
   apiKey: string;
   threadId: string | null;
+  contextUsageByAgentKey: ThreadContextUsageByAgentKey;
   values: StateType;
   messages: ChatKitAIMessage[];
   isLoading: boolean;
@@ -79,7 +85,7 @@ const StreamContext = createContext<StreamContextType | undefined>(undefined);
 
 const defaultApiUrl =
   (import.meta.env.VITE_XPERTAI_API_URL as string | undefined) ??
-  'https://api.mtda.cloud/api/ai';
+  'https://api.xpertai.cn/api/ai';
 
 const DEFAULT_HISTORY_LIMIT = 200;
 
@@ -411,7 +417,7 @@ function normalizeToolMessagesResponse(response: unknown): ClientToolMessageInpu
 /**
  * Process each stream event chunk
  */
-function applyStreamEvent(
+export function applyStreamEvent(
   chunk: StreamChunk,
   setValues: React.Dispatch<React.SetStateAction<StateType>>,
   setError: React.Dispatch<React.SetStateAction<unknown>>,
@@ -420,6 +426,7 @@ function applyStreamEvent(
   langGraphEventState: LangGraphEventState,
   eventContext?: LangGraphEventContext,
   onExecutionId?: (executionId: string | undefined) => void,
+  onThreadContextUsage?: (event: TThreadContextUsageEvent) => void,
 ) {
   const parsed = parseEventData(chunk.data);
   if (parsed == null) return;
@@ -566,6 +573,13 @@ function applyStreamEvent(
         sendEvent('public_event', ['effect', {name: toolCall.name, data: toolCall.args}]);
         break
       }
+      case ChatMessageEventTypeEnum.ON_CHAT_EVENT: {
+        const contextUsageEvent = parseThreadContextUsageEvent(payload.data);
+        if (contextUsageEvent) {
+          onThreadContextUsage?.(contextUsageEvent);
+        }
+        break;
+      }
       default:
         break;
     }
@@ -598,6 +612,8 @@ const StreamSession = ({
   const [values, setValues] = useState<StateType>({ messages: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [contextUsageByAgentKey, setContextUsageByAgentKey] =
+    useState<ThreadContextUsageByAgentKey>({});
   const [runtimeClientSecret, setRuntimeClientSecret] = useState(apiKey);
   const abortRef = useRef<AbortController | null>(null);
   const submitRef = useRef<StreamContextType['submit'] | null>(null);
@@ -635,6 +651,7 @@ const StreamSession = ({
     if (lastThreadIdRef.current !== currentThreadId) {
       lastThreadIdRef.current = currentThreadId;
       lastEventIdRef.current = null;
+      setContextUsageByAgentKey({});
     }
   }, [threadId]);
 
@@ -771,6 +788,7 @@ const StreamSession = ({
     abortRef.current = null;
     setIsLoading(false);
     setError(null);
+    setContextUsageByAgentKey({});
     setValues({ messages: initialMessages ?? [] });
     lastExecutionIdRef.current = null;
     lastEventIdRef.current = null;
@@ -875,6 +893,11 @@ const StreamSession = ({
               lastExecutionIdRef.current = executionId;
             }
           },
+          (event) => {
+            setContextUsageByAgentKey((prev) =>
+              applyThreadContextUsageEvent(prev, event, nextThreadId),
+            );
+          },
         );
       }
 
@@ -961,6 +984,7 @@ const StreamSession = ({
       const shouldStartNewThread = options?.newThread === true;
       if (shouldStartNewThread) {
         setValues({ messages: [] });
+        setContextUsageByAgentKey({});
         lastExecutionIdRef.current = null;
         lastEventIdRef.current = null;
       }
@@ -1011,6 +1035,7 @@ const StreamSession = ({
     assistantId,
     apiKey: runtimeClientSecret,
     threadId: threadId ?? null,
+    contextUsageByAgentKey,
     values,
     messages: values.messages ?? [],
     isLoading,
