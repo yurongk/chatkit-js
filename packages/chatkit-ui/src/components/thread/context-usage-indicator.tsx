@@ -3,6 +3,12 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { useStreamContext } from '../../providers/Stream';
 import { useChatkitTranslation } from '../../i18n/useChatkitTranslation';
+import {
+  getThreadContextUsage,
+  getThreadContextUsageTotalTokens,
+  normalizeContextUsageNumber,
+  resolveUsedContextSize,
+} from '../../lib/thread-context-usage';
 import { ProgressCircle } from '../ui/progress-circle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
@@ -15,19 +21,6 @@ const kNumberFormatter = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 1,
 });
-
-function normalizeContextSize(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-    return Math.floor(value);
-  }
-  if (typeof value === 'string') {
-    const parsed = Number.parseInt(value, 10);
-    if (Number.isFinite(parsed) && parsed >= 0) {
-      return parsed;
-    }
-  }
-  return null;
-}
 
 function normalizeAgentKey(value: unknown): string | null {
   if (typeof value !== 'string') {
@@ -42,8 +35,8 @@ function resolveAssistantContextSize(assistant: {
   config?: { configurable?: Record<string, unknown> } | null;
 }): number | null {
   return (
-    normalizeContextSize(assistant.metadata?.context_size) ??
-    normalizeContextSize(assistant.config?.configurable?.context_size)
+    normalizeContextUsageNumber(assistant.metadata?.context_size) ??
+    normalizeContextUsageNumber(assistant.config?.configurable?.context_size)
   );
 }
 
@@ -77,6 +70,21 @@ export function ContextUsageIndicator({
   const [maxContextSize, setMaxContextSize] = React.useState<number | null>(null);
   const [usedContextSize, setUsedContextSize] = React.useState<number | null>(null);
   const [assistantAgentKey, setAssistantAgentKey] = React.useState<string | null>(null);
+  const latestRealtimeUsageRef = React.useRef<{
+    threadId: string | null;
+    agentKey: string | null;
+    usedTokens: number | null;
+  }>({
+    threadId: null,
+    agentKey: null,
+    usedTokens: null,
+  });
+
+  const realtimeUsage = React.useMemo(
+    () => getThreadContextUsage(stream.contextUsageByAgentKey, assistantAgentKey),
+    [assistantAgentKey, stream.contextUsageByAgentKey],
+  );
+  const realtimeUsedContextSize = getThreadContextUsageTotalTokens(realtimeUsage);
 
   React.useEffect(() => {
     if (!stream.client || !stream.assistantId) {
@@ -105,6 +113,19 @@ export function ContextUsageIndicator({
   }, [stream.client, stream.assistantId]);
 
   React.useEffect(() => {
+    latestRealtimeUsageRef.current = {
+      threadId: stream.threadId ?? null,
+      agentKey: assistantAgentKey,
+      usedTokens: realtimeUsedContextSize,
+    };
+  }, [assistantAgentKey, realtimeUsedContextSize, stream.threadId]);
+
+  React.useEffect(() => {
+    if (realtimeUsedContextSize == null) return;
+    setUsedContextSize(realtimeUsedContextSize);
+  }, [realtimeUsedContextSize]);
+
+  React.useEffect(() => {
     if (!stream.client) {
       setUsedContextSize(null);
       return;
@@ -113,17 +134,32 @@ export function ContextUsageIndicator({
       setUsedContextSize(0);
       return;
     }
+    if (realtimeUsedContextSize != null) return;
     if (stream.isLoading) return;
 
     let cancelled = false;
+    const requestThreadId = stream.threadId;
+    const requestAgentKey = assistantAgentKey;
     stream.client.threads.getContextUsage(
-            stream.threadId,
-            assistantAgentKey ? { agentKey: assistantAgentKey } : undefined,
+            requestThreadId,
+            requestAgentKey ? { agentKey: requestAgentKey } : undefined,
           )
-      .then((result) => normalizeContextSize(result?.usage?.context_tokens))
+      .then((result) => normalizeContextUsageNumber(result?.usage?.context_tokens))
       .then((result) => {
         if (cancelled) return;
-        setUsedContextSize(result ?? 0);
+        const latestRealtimeUsage = latestRealtimeUsageRef.current;
+        if (
+          latestRealtimeUsage.usedTokens != null &&
+          latestRealtimeUsage.threadId === requestThreadId &&
+          latestRealtimeUsage.agentKey === requestAgentKey
+        ) {
+          return;
+        }
+        setUsedContextSize(
+          resolveUsedContextSize({
+            fallbackUsedTokens: result,
+          }),
+        );
       })
       .catch((err) => {
         if (cancelled) return;
@@ -133,7 +169,15 @@ export function ContextUsageIndicator({
     return () => {
       cancelled = true;
     };
-  }, [assistantAgentKey, stream.apiKey, stream.apiUrl, stream.client, stream.threadId, stream.isLoading]);
+  }, [
+    assistantAgentKey,
+    realtimeUsedContextSize,
+    stream.apiKey,
+    stream.apiUrl,
+    stream.client,
+    stream.threadId,
+    stream.isLoading,
+  ]);
 
   if (
     typeof maxContextSize !== 'number' ||
