@@ -1,11 +1,13 @@
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 const externalDeps = ['@xpert-ai/chatkit-types'];
 
 export default defineConfig({
   plugins: [
+    tsconfigPaths(),
     dts({
       rollupTypes: true,
       exclude: ['src/**/*.test.ts', 'src/__mocks__/**'],
