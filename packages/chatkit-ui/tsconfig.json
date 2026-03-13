@@ -3,13 +3,12 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "..",
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "noEmit": true,
-    "verbatimModuleSyntax": true,
-    "baseUrl": "."
+    "verbatimModuleSyntax": true
   },
   "include": [
     "src/**/*.ts",
