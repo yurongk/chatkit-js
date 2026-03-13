@@ -5,12 +5,7 @@
     "rootDir": "..",
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "paths": {
-      "@xpert-ai/chatkit-types": ["../chatkit/src/index.ts"],
-      "@xpert-ai/chatkit-web-component": ["../web-component/src/index.ts"]
-    },
     "verbatimModuleSyntax": true,
-    "baseUrl": ".",
     "skipLibCheck": false,
     "noEmit": true
   },
