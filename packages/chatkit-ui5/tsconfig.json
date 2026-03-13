@@ -1,17 +1,14 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "..",
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
     "paths": {
       "@xpert-ai/chatkit-types": ["../chatkit/src/index.ts"],
       "@xpert-ai/chatkit-web-component": ["../web-component/src/index.ts"]
     },
-    "strict": true,
-    "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "baseUrl": ".",
     "skipLibCheck": false,
