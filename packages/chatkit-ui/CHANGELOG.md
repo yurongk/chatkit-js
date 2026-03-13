@@ -1,5 +1,13 @@
 # @xpert-ai/chatkit-ui
 
+## 0.0.16
+
+### Patch Changes
+
+- c93a4b4: thread context usage
+- Updated dependencies [c93a4b4]
+  - @xpert-ai/chatkit-types@0.0.13
+
 ## 0.0.15
 
 ### Patch Changes
