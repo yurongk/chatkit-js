@@ -287,7 +287,7 @@ const defaultComponents: any = {
     return (
       <code
         className={cn(
-          "bg-muted rounded px-1.5 py-0.5 font-mono text-[0.9em] font-semibold",
+          "bg-muted rounded px-1.5 py-0.5 font-mono text-[0.9em] font-semibold break-all",
           className,
         )}
         {...props}
