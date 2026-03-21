@@ -20,6 +20,7 @@ import { useThreads } from '../hooks/useThreads';
 import { useChatkitTranslation } from '../i18n/useChatkitTranslation';
 import { ContextUsageIndicator } from './thread/context-usage-indicator';
 import { Button } from './ui/button';
+import { buildInjectedRequestOptions } from '../lib/request-options';
 
 export type ChatProps = {
   className?: string;
@@ -376,9 +377,18 @@ export function Chat({
       inputPayload.files = filesToSend;
     }
 
+    const requestOptions = buildInjectedRequestOptions({
+      defaults: options?.request,
+      humanInput: inputPayload,
+    });
+
     stream.submit(
-      { input: inputPayload },
       {
+        input: inputPayload,
+        ...(requestOptions.state ? { state: requestOptions.state } : {}),
+      },
+      {
+        ...(requestOptions.context ? { context: requestOptions.context } : {}),
         optimisticValues: (prev) => {
           const prevMessages = prev?.messages ?? [];
           return { ...prev, messages: [...prevMessages, newMessage] };
