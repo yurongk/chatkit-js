@@ -4,6 +4,7 @@ import type { Capability } from "@xpert-ai/chatkit-web-shared";
 import type { Message } from '@xpert-ai/xpert-sdk';
 import { useStreamManager } from "../hooks/useStream";
 import { createMessageId } from "../lib/utils";
+import { buildInjectedRequestOptions } from "../lib/request-options";
 
 type CommandMessageMap = {
   onSendUserMessage: SendUserMessageParams
@@ -94,6 +95,7 @@ export function ParentMessengerProvider({
     >(),
   );
   const onSetOptionsHandlersRef = useRef(new Set<OnSetOptionsHandler>());
+  const latestOptionsRef = useRef<ChatKitOptions | null>(null);
 
   const isParentAvailable = useMemo(() => {
     return typeof window !== "undefined" && window.parent !== window;
@@ -154,21 +156,23 @@ export function ParentMessengerProvider({
             type: 'human',
             content: prompt,
           };
+        const requestOptions = buildInjectedRequestOptions({
+          defaults: latestOptionsRef.current?.request,
+          state: params.state,
+          humanInput: {
+            input: prompt,
+          },
+        });
 
         streamRef.current?.submit({
             input: {
               input: prompt,
             },
-            state: {
-              ...(params.state || {}),
-              [STATE_VARIABLE_HUMAN]: {
-                ...(params.state?.[STATE_VARIABLE_HUMAN] || {}),
-                input: prompt,
-              },
-            }
+            ...(requestOptions.state ? { state: requestOptions.state } : {}),
           }
           ,{
             newThread: params.newThread,
+            ...(requestOptions.context ? { context: requestOptions.context } : {}),
             optimisticValues: (prev) => {
               const prevMessages = prev?.messages ?? [];
               return { ...prev, messages: [...prevMessages, newMessage] };
@@ -183,6 +187,7 @@ export function ParentMessengerProvider({
 
       // Handle `setOptions` command
       if (payload.type == "command" && payload.command === "onSetOptions") {
+        latestOptionsRef.current = (payload.data as ChatKitOptions | null) ?? null;
         if (onSetOptionsHandlersRef.current.size > 0) {
           onSetOptionsHandlersRef.current.forEach((handler) => {
             handler(payload.data as ChatKitOptions | null);
