@@ -295,6 +295,19 @@ type HostedApiConfig = {
   xpertId?: string;
 };
 
+export type ChatKitRequestOptions = {
+  /**
+   * Custom graph state merged into every submitted message request.
+   * The active user input is always written into `state.human.input`.
+   */
+  state?: Record<string, any>;
+
+  /**
+   * Additional stream context merged into every submitted message request.
+   */
+  context?: Record<string, unknown>;
+};
+
 export type ChatKitOptions = {
   /**
    * ChatKit iframe URL for web component integrations.
@@ -302,6 +315,12 @@ export type ChatKitOptions = {
   frameUrl?: string;
 
   api: CustomApiConfig | HostedApiConfig;
+
+  /**
+   * Default request values that should be injected into every user message sent
+   * from this ChatKit instance.
+   */
+  request?: ChatKitRequestOptions;
 
   /**
    * Locale override for ChatKit UI. If not provided, the browser's locale
