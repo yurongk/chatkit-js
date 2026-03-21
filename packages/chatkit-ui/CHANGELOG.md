@@ -1,5 +1,13 @@
 # @xpert-ai/chatkit-ui
 
+## 0.0.17
+
+### Patch Changes
+
+- a11dc53: chatkit request options
+- Updated dependencies [a11dc53]
+  - @xpert-ai/chatkit-types@0.0.14
+
 ## 0.0.16
 
 ### Patch Changes
