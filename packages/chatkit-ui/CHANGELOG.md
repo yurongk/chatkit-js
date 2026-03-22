@@ -1,5 +1,13 @@
 # @xpert-ai/chatkit-ui
 
+## 0.0.18
+
+### Patch Changes
+
+- fb7f719: Move env to context param
+- Updated dependencies [fb7f719]
+  - @xpert-ai/chatkit-types@0.0.15
+
 ## 0.0.17
 
 ### Patch Changes
