@@ -173,6 +173,7 @@ export function ParentMessengerProvider({
           ,{
             newThread: params.newThread,
             ...(requestOptions.context ? { context: requestOptions.context } : {}),
+            ...(requestOptions.config ? { config: requestOptions.config } : {}),
             optimisticValues: (prev) => {
               const prevMessages = prev?.messages ?? [];
               return { ...prev, messages: [...prevMessages, newMessage] };
