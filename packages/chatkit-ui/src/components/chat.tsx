@@ -389,6 +389,7 @@ export function Chat({
       },
       {
         ...(requestOptions.context ? { context: requestOptions.context } : {}),
+        ...(requestOptions.config ? { config: requestOptions.config } : {}),
         optimisticValues: (prev) => {
           const prevMessages = prev?.messages ?? [];
           return { ...prev, messages: [...prevMessages, newMessage] };

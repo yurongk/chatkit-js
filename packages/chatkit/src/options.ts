@@ -295,17 +295,42 @@ type HostedApiConfig = {
   xpertId?: string;
 };
 
-export type ChatKitRequestOptions = {
+export type ChatKitRequestContext = {
+  /**
+   * Request-scoped runtime env overrides.
+   * ChatKit forwards this field to LangGraph as `context.env`.
+   */
+  env?: Record<string, string>;
+  [key: string]: unknown;
+};
+
+export type ChatKitRequestOptions<
+  TState = Record<string, any>,
+  TContext extends ChatKitRequestContext = ChatKitRequestContext,
+  TConfig extends Record<string, unknown> = Record<string, unknown>,
+> = {
   /**
    * Custom graph state merged into every submitted message request.
    * The active user input is always written into `state.human.input`.
    */
-  state?: Record<string, any>;
+  state?: TState;
 
   /**
    * Additional stream context merged into every submitted message request.
+   *
+   * Request-scoped runtime env overrides should be placed in `context.env`.
+   * Extend `TContext` with any other request-scoped context fields you need.
    */
-  context?: Record<string, unknown>;
+  context?: TContext;
+
+  /**
+   * Additional LangGraph run config merged into every submitted message request.
+   *
+   * This is forwarded to the hosted `runs.stream` request as `config`.
+   * Use this for LangGraph runtime controls such as tags or configurable values,
+   * not request-scoped env overrides.
+   */
+  config?: TConfig;
 };
 
 export type ChatKitOptions = {
