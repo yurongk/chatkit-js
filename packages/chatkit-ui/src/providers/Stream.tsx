@@ -20,6 +20,7 @@ import type { Message } from '@langchain/core/messages';
 import { type ToolCall } from '@langchain/core/messages/tool';
 import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent, type ChatEventEnvelope, type TMessageContentComplex, type TMessageContentComponent, type TThreadContextUsageEvent } from '@xpert-ai/chatkit-types';
 import { appendMessageContent } from '../lib/message';
+import { normalizeRequestContextAndConfig } from '../lib/request-options';
 import { useParentMessenger } from '../hooks/useParentMessenger';
 import type { ParentMessenger } from './ParentMessenger';
 import {
@@ -44,7 +45,7 @@ export type StreamSubmitOptions = {
     | Partial<StateType>
     | ((prev: StateType) => Partial<StateType>);
   context?: Record<string, unknown>;
-  config?: Config;
+  config?: Config & Record<string, unknown>;
   checkpoint?: Omit<Checkpoint, 'thread_id'> | null;
   streamMode?: StreamMode | StreamMode[];
   streamSubgraphs?: boolean;
@@ -857,11 +858,15 @@ const StreamSession = ({
     abortRef.current = abortController;
     setIsLoading(true);
     try {
-      const stream = options?.joinExistingThread ? client.runs.joinStream(nextThreadId, runId) :
+      const normalizedRequest = normalizeRequestContextAndConfig({
+        context: options?.context,
+        config: options?.config,
+      });
+      const stream = options?.joinExistingThread && runId ? client.runs.joinStream(nextThreadId, runId) :
         client.runs.stream(nextThreadId, assistantId, {
           input: input ?? null,
-          context: options?.context,
-          config: options?.config,
+          context: normalizedRequest.context,
+          config: normalizedRequest.config as Config | undefined,
           checkpoint: options?.checkpoint ?? undefined,
           streamMode: options?.streamMode,
           streamSubgraphs: options?.streamSubgraphs,

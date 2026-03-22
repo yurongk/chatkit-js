@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { STATE_VARIABLE_HUMAN } from '@xpert-ai/chatkit-types';
 
-import { buildInjectedRequestOptions } from './request-options';
+import {
+  buildInjectedRequestOptions,
+  mergeRequestOptions,
+  normalizeRequestContextAndConfig,
+} from './request-options';
 
 describe('buildInjectedRequestOptions', () => {
   it('merges default state with the active human input', () => {
@@ -47,6 +51,9 @@ describe('buildInjectedRequestOptions', () => {
         },
         context: {
           source: 'resource-page',
+          env: {
+            region: 'default',
+          },
         },
       },
       state: {
@@ -60,6 +67,15 @@ describe('buildInjectedRequestOptions', () => {
       context: {
         source: 'custom-send',
         traceId: 'trace-1',
+        env: {
+          oidc_token: 'override-token',
+          region: 'override-from-context',
+        },
+      },
+      config: {
+        configurable: {
+          agentKey: 'planner',
+        },
       },
       humanInput: {
         input: 'ask something',
@@ -80,6 +96,119 @@ describe('buildInjectedRequestOptions', () => {
       context: {
         source: 'custom-send',
         traceId: 'trace-1',
+        env: {
+          region: 'override-from-context',
+          oidc_token: 'override-token',
+        },
+      },
+      config: {
+        configurable: {
+          agentKey: 'planner',
+        },
+      },
+    });
+  });
+
+  it('keeps config.env inside config instead of mapping it into context.env', () => {
+    const result = buildInjectedRequestOptions({
+      defaults: {
+        context: {
+          source: 'resource-page',
+        },
+        config: {
+          env: {
+            oidc_token: 'token-1',
+            region: 'cn',
+          },
+          configurable: {
+            recursion_limit: 10,
+          },
+        },
+      },
+      config: {
+        env: {
+          oidc_token: 'token-2',
+        },
+        configurable: {
+          agentKey: 'planner',
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      context: {
+        source: 'resource-page',
+      },
+      config: {
+        env: {
+          oidc_token: 'token-2',
+        },
+        configurable: {
+          agentKey: 'planner',
+        },
+      },
+    });
+  });
+
+  it('lets explicit context.env override default context.env', () => {
+    const result = mergeRequestOptions({
+      defaults: {
+        context: {
+          env: {
+            oidc_token: 'token-1',
+            region: 'default-context',
+          },
+        },
+      },
+      context: {
+        env: {
+          region: 'explicit-context',
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      context: {
+        env: {
+          oidc_token: 'token-1',
+          region: 'explicit-context',
+        },
+      },
+    });
+  });
+
+  it('keeps context.env and config separate for the run payload', () => {
+    const result = normalizeRequestContextAndConfig({
+      context: {
+        source: 'resource-page',
+        env: {
+          oidc_token: 'token-1',
+        },
+      },
+      config: {
+        env: {
+          legacy: 'value',
+        },
+        configurable: {
+          agentKey: 'planner',
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      context: {
+        source: 'resource-page',
+        env: {
+          oidc_token: 'token-1',
+        },
+      },
+      config: {
+        env: {
+          legacy: 'value',
+        },
+        configurable: {
+          agentKey: 'planner',
+        },
       },
     });
   });
