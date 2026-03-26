@@ -1,0 +1,11 @@
+{
+  "name": "managed-chatkit-angular",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter managed-chatkit-angular-frontend dev",
+    "build": "pnpm --filter managed-chatkit-angular-frontend build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

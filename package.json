@@ -15,6 +15,7 @@
     "clean": "pnpm -r run clean",
     "check": "prettier --check . && pnpm -r run lint && pnpm types && pnpm test",
     "managed-chatkit:dev": "pnpm --filter managed-chatkit dev",
+    "managed-chatkit-angular:dev": "pnpm --filter managed-chatkit-angular dev",
     "excel-echarts-chatkit:dev": "pnpm --filter excel-echarts-chatkit dev"
   },
   "devDependencies": {
