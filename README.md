@@ -75,6 +75,7 @@ export function MyChat() {
 chatkit-js/
 ├── packages/
 │   ├── chatkit/              # Core type definitions
+│   ├── chatkit-angular/      # Angular bindings
 │   ├── chatkit-js/           # Vanilla JS factory helpers
 │   ├── chatkit-react/        # React bindings
 │   ├── chatkit-ui/           # Complete UI library
@@ -88,6 +89,7 @@ chatkit-js/
 ## 📦 Packages
 
 - [@xpert-ai/chatkit](./packages/chatkit/)
+- [@xpert-ai/chatkit-angular](./packages/chatkit-angular/)
 - [@xpert-ai/chatkit-react](./packages/chatkit-react/)
 - [@xpert-ai/chatkit-vue](./packages/chatkit-vue/)
 - [@xpert-ai/chatkit-ui](./packages/chatkit-ui/)
