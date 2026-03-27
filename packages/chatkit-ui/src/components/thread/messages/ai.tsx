@@ -13,6 +13,7 @@ import type {
 } from '@xpert-ai/chatkit-types';
 import { ChevronDown, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
+import { useChatkitTranslation } from '../../../i18n/useChatkitTranslation';
 import { isNearBottom } from '../../../lib/scroll';
 import { cn } from '../../../lib/utils';
 import { Badge } from '../../ui/badge';
@@ -340,6 +341,7 @@ function renderContent(content: ChatkitMessage['content'] | any, messageId: stri
 }
 
 export function AssistantMessage({ message, className, isStreaming = false }: AssistantMessageProps) {
+  const { t } = useChatkitTranslation();
   const content = message.content as any;
   const hasContent = content != null &&
     !(
@@ -368,8 +370,8 @@ export function AssistantMessage({ message, className, isStreaming = false }: As
           className="w-full"
         >
           <TabsList className="h-9">
-            <TabsTrigger value="answer">Answer</TabsTrigger>
-            <TabsTrigger value="reasoning">Reasoning</TabsTrigger>
+            <TabsTrigger value="answer">{t('message.answer')}</TabsTrigger>
+            <TabsTrigger value="reasoning">{t('message.reasoning')}</TabsTrigger>
           </TabsList>
           <TabsContent value="answer" className="space-y-3">
             {answerNode}
