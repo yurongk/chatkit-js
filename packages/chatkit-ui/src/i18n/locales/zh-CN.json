@@ -53,5 +53,9 @@
     "errorToast": "发生错误，请重试。",
     "errorLabel": "错误：",
     "langGraphMessages": "LangGraph 消息..."
+  },
+  "message": {
+    "answer": "回答",
+    "reasoning": "推理"
   }
 }
