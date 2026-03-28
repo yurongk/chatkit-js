@@ -683,7 +683,7 @@ export function Chat({
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b px-4 py-2 sticky top-0 z-10 bg-background">
+      <div className="flex items-center justify-between border-b p-2 sticky top-0 z-10 bg-background">
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="relative shrink-0">
             <ChatkitAvatar
