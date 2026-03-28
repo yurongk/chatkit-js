@@ -75,6 +75,7 @@ export function MyChat() {
 chatkit-js/
 ├── packages/
 │   ├── chatkit/              # Core type definitions
+│   ├── chatkit-angular/      # Angular bindings
 │   ├── chatkit-js/           # Vanilla JS factory helpers
 │   ├── chatkit-react/        # React bindings
 │   ├── chatkit-ui/           # Complete UI library
@@ -88,6 +89,7 @@ chatkit-js/
 ## 📦 Packages
 
 - [@xpert-ai/chatkit](./packages/chatkit/)
+- [@xpert-ai/chatkit-angular](./packages/chatkit-angular/)
 - [@xpert-ai/chatkit-react](./packages/chatkit-react/)
 - [@xpert-ai/chatkit-vue](./packages/chatkit-vue/)
 - [@xpert-ai/chatkit-ui](./packages/chatkit-ui/)
@@ -123,8 +125,9 @@ This repo uses **Changesets + GitHub Actions** for automated npm publishing.
 
 ### One-time setup
 
-1. Add `NPM_TOKEN` in GitHub repo secrets (Settings -> Secrets and variables -> Actions).
-2. Ensure Actions has permission to create pull requests (used by `.github/workflows/release.yml`).
+1. For packages that already exist on npm, configure this GitHub repository as a **Trusted Publisher** for the package(s) released from this repo.
+2. For brand-new packages, do a one-time manual publish first, then configure trusted publishing for subsequent releases.
+3. Ensure GitHub Actions has permission to create pull requests and request an OIDC token (used by `.github/workflows/release.yml`).
 
 ### Release flow
 
@@ -140,9 +143,29 @@ pnpm changeset
    - Create/update a Release PR with version bumps and changelogs.
    - After the Release PR is merged, publish packages to npm automatically.
 
+### First publish for a new package
+
+Trusted publishing can only be configured after the package already exists on npm. For a brand-new package such as `@xpert-ai/chatkit-angular`:
+
+1. Sign in to npm with an account that has publish access to the `@xpert-ai` scope.
+2. Build the repo:
+
+```bash
+pnpm build
+```
+
+3. Publish the new package once manually:
+
+```bash
+pnpm --filter @xpert-ai/chatkit-angular publish --access public
+```
+
+4. After the first publish succeeds, configure the package to use this repo's trusted publisher / `.github/workflows/release.yml`.
+5. Future releases of that package can then go through the normal Changesets + GitHub Actions flow.
+
 ### Manual fallback (optional)
 
-If you need to publish manually:
+If you need to publish manually from your local machine, make sure you are authenticated with npm first (`npm login` or an npm access token), then run:
 
 ```bash
 pnpm build && pnpm changeset publish

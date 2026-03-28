@@ -1,5 +1,29 @@
 # @xpert-ai/chatkit-ui
 
+## 0.0.18
+
+### Patch Changes
+
+- fb7f719: Move env to context param
+- Updated dependencies [fb7f719]
+  - @xpert-ai/chatkit-types@0.0.15
+
+## 0.0.17
+
+### Patch Changes
+
+- a11dc53: chatkit request options
+- Updated dependencies [a11dc53]
+  - @xpert-ai/chatkit-types@0.0.14
+
+## 0.0.16
+
+### Patch Changes
+
+- c93a4b4: thread context usage
+- Updated dependencies [c93a4b4]
+  - @xpert-ai/chatkit-types@0.0.13
+
 ## 0.0.15
 
 ### Patch Changes
