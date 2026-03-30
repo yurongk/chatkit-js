@@ -53,5 +53,9 @@
     "errorToast": "An error occurred. Please try again.",
     "errorLabel": "Error:",
     "langGraphMessages": "LangGraph Messages..."
+  },
+  "message": {
+    "answer": "Answer",
+    "reasoning": "Reasoning"
   }
 }

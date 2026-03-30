@@ -8,6 +8,7 @@ import App from './App';
 import './index.css';
 import { ParentMessengerProvider } from './providers/ParentMessenger';
 import { useParentMessenger } from './hooks/useParentMessenger';
+import { normalizeClientSecretResult } from './lib/client-secret';
 
 const getParentOrigin = () => {
   if (typeof document === 'undefined' || !document.referrer) return '*';
@@ -48,6 +49,7 @@ const initialOptions = decodeOptionsFromUrl();
 
 const AppContainer = () => {
   const [clientSecret, setClientSecret] = React.useState(initialClientSecret);
+  const [organizationId, setOrganizationId] = React.useState<string | undefined>();
   const [options, setOptions] = React.useState<ChatKitOptions | null>(initialOptions);
   const [isClientSecretInitializing, setIsClientSecretInitializing] = React.useState(() => {
     if (typeof window === 'undefined') return false;
@@ -56,12 +58,17 @@ const AppContainer = () => {
     return isInsideIframe && !hasInitialSecret;
   });
   const initialClientSecretRef = React.useRef(initialClientSecret);
+  const organizationIdRef = React.useRef<string | undefined>(undefined);
   const parentOriginRef = React.useRef<string>('*');
   const { isParentAvailable, sendCommand } = useParentMessenger({
     onSetOptions: (nextOptions) => {
       setOptions(nextOptions);
     },
   });
+
+  React.useEffect(() => {
+    organizationIdRef.current = organizationId;
+  }, [organizationId]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || window.parent === window) return;
@@ -103,9 +110,12 @@ const AppContainer = () => {
     sendCommand("onGetClientSecret", currentSecret)
       .then((response) => {
         if (!isActive) return;
-        if (typeof response === "string") {
-          setClientSecret(response);
-        }
+        const resolved = normalizeClientSecretResult(
+          response,
+          organizationIdRef.current,
+        );
+        setClientSecret(resolved.secret);
+        setOrganizationId(resolved.organizationId);
       })
       .catch((error) => {
         if (!isActive) return;
@@ -126,6 +136,7 @@ const AppContainer = () => {
   return (
     <App
       clientSecret={clientSecret}
+      organizationId={organizationId}
       options={options}
       isClientSecretInitializing={isClientSecretInitializing}
     />

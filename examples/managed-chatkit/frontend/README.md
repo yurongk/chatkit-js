@@ -97,6 +97,9 @@ export default function App() {
 }
 ```
 
+If your session endpoint also returns an organization id, you can instead return
+`{ secret: client_secret, organizationId }`.
+
 ## Scripts
 
 ```bash

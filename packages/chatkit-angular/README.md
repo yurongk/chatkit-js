@@ -51,7 +51,10 @@ export class AppComponent {
           headers: { 'Content-Type': 'application/json' },
         });
         const data = await response.json();
-        return data.client_secret;
+        return {
+          secret: data.client_secret,
+          organizationId: data.organization_id,
+        };
       },
     },
     onReady: () => {
@@ -60,6 +63,9 @@ export class AppComponent {
   });
 }
 ```
+
+`getClientSecret` may return the legacy `string`, or return
+`{ secret, organizationId }` to forward `organization-id` on hosted API calls.
 
 If you prefer a wrapper component, `ChatKit` is also exported and renders the
 same web component for you:

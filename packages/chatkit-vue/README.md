@@ -1,6 +1,6 @@
 # @xpert-ai/chatkit-vue
 
-Vue 3 bindings for Xpert Chatkit Web Component.
+Vue 3 bindings for the Xpert ChatKit web component.
 
 ## Install
 
@@ -8,17 +8,32 @@ Vue 3 bindings for Xpert Chatkit Web Component.
 pnpm add @xpert-ai/chatkit-vue
 ```
 
-## Usage (Vue 3)
+## Usage
 
 ```vue
 <script setup lang="ts">
 import { ChatKit, useChatKit } from '@xpert-ai/chatkit-vue';
 
 const { control } = useChatKit({
-  apiBase: 'https://your-xpertai-api-host',
-  apiKey: 'your-xpertai-api-key',
+  frameUrl: '<url-to-chatkit-frame>',
+  api: {
+    apiUrl: 'https://api.xpertai.cn',
+    xpertId: 'your-assistant-id',
+    getClientSecret: async () => {
+      const response = await fetch('/api/create-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+
+      return {
+        secret: data.client_secret,
+        organizationId: data.organization_id,
+      };
+    },
+  },
   onReady: () => {
-    console.log('chatkit ready');
+    console.log('ChatKit is ready');
   },
 });
 </script>
@@ -27,6 +42,12 @@ const { control } = useChatKit({
   <ChatKit :control="control" style="height: 100vh;" />
 </template>
 ```
+
+`getClientSecret` may continue returning the legacy `string`, or return
+`{ secret, organizationId }` to have ChatKit send `organization-id` on hosted
+API requests.
+
+## Vite Config
 
 Register the custom element tag in your Vue compiler config:
 
@@ -48,9 +69,8 @@ export default defineConfig({
 });
 ```
 
-## Usage (uni-app)
+## uni-app
 
-This wrapper works for uni-app H5 and `web-view` targets where Web Components are supported.
-If you need native mini-program UI, you will need a separate rendering layer.
-
-In uni-app (Vue 3), also register `xpertai-chatkit` as a custom element in your build config.
+This wrapper works for uni-app H5 and `web-view` targets where Web Components
+are supported. If you need native mini-program UI, you will need a separate
+rendering layer.

@@ -5,6 +5,13 @@ export { Button } from './components/ui/button';
 export { Input } from './components/ui/input';
 export { ScrollArea, ScrollBar } from './components/ui/scroll-area';
 export { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
+export {
+  ChatkitAvatar,
+  extractAssistantAvatar,
+  getAvatarFallback,
+  normalizeChatkitAvatar,
+} from './components/ui/chatkit-avatar';
+export type { ChatkitAvatarData, ChatkitAvatarProps } from './components/ui/chatkit-avatar';
 export { Badge } from './components/ui/badge';
 export {
   Card,

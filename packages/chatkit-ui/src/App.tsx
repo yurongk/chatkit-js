@@ -10,10 +10,16 @@ import { useParentMessenger } from './hooks/useParentMessenger';
 export type AppProps = {
   options?: ChatKitOptions | null;
   clientSecret: string;
+  organizationId?: string;
   isClientSecretInitializing?: boolean;
 };
 
-export function App({ clientSecret, options, isClientSecretInitializing = false }: AppProps) {
+export function App({
+  clientSecret,
+  organizationId,
+  options,
+  isClientSecretInitializing = false,
+}: AppProps) {
   const { isParentAvailable, sendCommand } = useParentMessenger();
   const apiKey = clientSecret.trim() ? clientSecret : undefined;
   const xpertId = import.meta.env.VITE_XPERTAI_XPERT_ID as string | undefined;
@@ -34,7 +40,12 @@ export function App({ clientSecret, options, isClientSecretInitializing = false 
         <A2UIProvider onAction={(action) => {
           if (isParentAvailable) sendCommand('onWidgetAction', { action: action.actionId, widgetItem: action.context });
         }}>
-          <StreamProvider apiKey={apiKey} apiUrl={options?.api.apiUrl || apiUrl} xpertId={options?.api.xpertId || xpertId}>
+          <StreamProvider
+            apiKey={apiKey}
+            organizationId={organizationId}
+            apiUrl={options?.api.apiUrl || apiUrl}
+            xpertId={options?.api.xpertId || xpertId}
+          >
             <Chat
               className="flex-1"
               clientSecret={apiKey}
