@@ -29,7 +29,10 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
         });
         const data = await response.json();
-        return data.client_secret;
+        return {
+          secret: data.client_secret,
+          organizationId: data.organization_id,
+        };
       }
     },
     onReady: () => {
@@ -59,7 +62,9 @@ interface UseChatKitOptions extends Partial<ChatKitOptions> {
   api: {
     apiUrl: string;
     xpertId: string;
-    getClientSecret: () => Promise<string>;
+    getClientSecret: (
+      currentClientSecret: string | null,
+    ) => Promise<string | { secret: string; organizationId?: string }>;
   };
   locale?: SupportedLocale; // 'en-US' | 'zh-Hans'
   theme?: ThemeOptions;
@@ -83,6 +88,10 @@ interface ChatKitInstance {
   // ... other methods
 }
 ```
+
+`getClientSecret` may keep returning the legacy `string`, or return
+`{ secret, organizationId }` to have ChatKit send `organization-id` on hosted
+API requests.
 
 ### `<ChatKit />` Component
 

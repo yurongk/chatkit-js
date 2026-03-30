@@ -28,8 +28,11 @@ const chatkit = createChatKit(element, {
     api: {
       async getClientSecret() {
         const res = await fetch('/api/chatkit/session', { method: 'POST' });
-        const { client_secret } = await res.json();
-        return client_secret;
+        const { client_secret, organization_id } = await res.json();
+        return {
+          secret: client_secret,
+          organizationId: organization_id,
+        };
       },
     },
     theme: { colorScheme: 'light', radius: 'round' },
@@ -59,3 +62,6 @@ document.body.appendChild(chatkit.element);
 ```
 
 Call `chatkit.destroy()` when you no longer need the instance to remove event listeners.
+
+`getClientSecret` also continues to support the legacy `Promise<string>` return
+shape when you do not need to send an organization id.

@@ -42,7 +42,10 @@ sap.ui.require(["xpertai/chatkit/ui5"], (ChatKitLib) => {
       api: {
         apiUrl: "https://api.mtda.cloud/api/ai",
         xpertId: "your-xpert-id",
-        getClientSecret: async () => "<API Key securely retrieved from backend>"
+        getClientSecret: async () => ({
+          secret: "<API Key securely retrieved from backend>",
+          organizationId: "<current-user-org-id>"
+        })
       },
       onEffect: ({ name, data }) => {
         // Handle ChatKit effects for application integration, e.g., adding to todo list
@@ -59,7 +62,7 @@ sap.ui.require(["xpertai/chatkit/ui5"], (ChatKitLib) => {
 - `frameUrl`: ChatKit Host address (HTML container).
 - `api.apiUrl`: Backend API address.
 - `api.xpertId`: XpertAI platform digital expert ID.
-- `api.getClientSecret()`: Async function to securely retrieve user-specific API Key from backend.
+- `api.getClientSecret()`: Async function to securely retrieve a user-specific API key from backend. It may return either the legacy `string` or `{ secret, organizationId }`.
 - Event callbacks: `onReady`, `onError`, `onResponseStart`, `onResponseEnd`, `onThreadChange`, `onThreadLoadStart`, `onThreadLoadEnd`, `onEffect`, etc. (follow `onXxx` naming convention).
 
 ## Control Methods

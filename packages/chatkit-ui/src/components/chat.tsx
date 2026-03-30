@@ -14,7 +14,7 @@ import { HistorySidebar } from './history/HistorySidebar';
 import { AssistantMessage } from './thread/messages/ai';
 import { MessageActions } from './thread/MessageActions';
 import { StartScreen } from './thread/StartScreen';
-// Avatar import removed - AI avatar disabled
+import { ChatkitAvatar, type ChatkitAvatarData, extractAssistantAvatar } from './ui/chatkit-avatar';
 import { useStreamManager } from '../hooks/useStream';
 import { useThreads } from '../hooks/useThreads';
 import { useChatkitTranslation } from '../i18n/useChatkitTranslation';
@@ -82,6 +82,7 @@ export function Chat({
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
   const [historyError, setHistoryError] = React.useState<string | null>(null);
   const [assistantName, setAssistantName] = React.useState<string | null>(null);
+  const [assistantAvatar, setAssistantAvatar] = React.useState<ChatkitAvatarData | null>(null);
 
   // Minimum loading dots display time (ms)
   const LOADING_DOTS_MIN_DURATION = 800;
@@ -327,17 +328,36 @@ export function Chat({
 
   // Fetch assistant name from API
   React.useEffect(() => {
-    if (missingConfig || !stream.client || !stream.assistantId) return;
+    if (missingConfig || !stream.client || !stream.assistantId) {
+      setAssistantName(null);
+      setAssistantAvatar(null);
+      return;
+    }
+
+    setAssistantName(null);
+    setAssistantAvatar(null);
+
+    let cancelled = false;
     stream.client.assistants
       .get(stream.assistantId)
       .then((assistant) => {
-        if (assistant) {
-          setAssistantName(assistant.metadata?.title as string || assistant.name);
-        }
+        if (cancelled || !assistant) return;
+        const assistantTitle =
+          typeof assistant.metadata?.title === 'string' && assistant.metadata.title.trim()
+            ? assistant.metadata.title
+            : assistant.name;
+        setAssistantName(assistantTitle);
+        setAssistantAvatar(extractAssistantAvatar(assistant));
       })
       .catch((err) => {
+        if (cancelled) return;
+        setAssistantAvatar(null);
         console.warn('[Chat] Failed to load assistant info:', err);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [missingConfig, stream.client, stream.assistantId]);
 
   // Get successfully uploaded files (matching IStorageFile interface)
@@ -654,6 +674,8 @@ export function Chat({
     return message || t('thread.errorToast');
   }, [currentThread, t]);
 
+  const assistantTitle = assistantName || resolvedTitle;
+
   return (
     <div ref={viewportRef}
       className={cn(
@@ -661,11 +683,20 @@ export function Chat({
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b px-4 py-2 sticky top-0 z-10 bg-background">
-        <div className="flex items-center gap-3">
-          <div className="h-2 w-2 rounded-full bg-green-500"></div>
-          <div>
-            <h2 className="text-lg font-semibold">{assistantName || resolvedTitle}</h2>
+      <div className="flex items-center justify-between border-b p-2 sticky top-0 z-10 bg-background">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className="relative shrink-0">
+            <ChatkitAvatar
+              avatar={assistantAvatar}
+              className="h-9 w-9 border border-border/60"
+              label={assistantTitle}
+            />
+            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-green-500" />
+          </div>
+          <div className='truncate'>
+            <h2 className="text-lg font-semibold truncate" title={assistantTitle}>
+              {assistantTitle}
+            </h2>
             <p className="text-xs text-muted-foreground">{t('chat.statusOnline')}</p>
           </div>
         </div>
