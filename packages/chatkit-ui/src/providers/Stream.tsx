@@ -20,6 +20,10 @@ import type { Message } from '@langchain/core/messages';
 import { type ToolCall } from '@langchain/core/messages/tool';
 import { ChatMessageEventTypeEnum, ChatMessageTypeEnum, type ClientToolMessageInput, type ClientToolRequest, type ClientToolResponse, type TChatRequest, type TMessageContent, type ChatEventEnvelope, type TMessageContentComplex, type TMessageContentComponent, type TThreadContextUsageEvent } from '@xpert-ai/chatkit-types';
 import { appendMessageContent } from '../lib/message';
+import {
+  normalizeClientSecretResult,
+  type ResolvedClientSecret,
+} from '../lib/client-secret';
 import { normalizeRequestContextAndConfig } from '../lib/request-options';
 import { useParentMessenger } from '../hooks/useParentMessenger';
 import type { ParentMessenger } from './ParentMessenger';
@@ -60,6 +64,7 @@ export type StreamContextType = {
   apiUrl: string;
   assistantId: string;
   apiKey: string;
+  organizationId?: string;
   threadId: string | null;
   contextUsageByAgentKey: ThreadContextUsageByAgentKey;
   values: StateType;
@@ -92,17 +97,60 @@ const DEFAULT_HISTORY_LIMIT = 200;
 
 function withClientSecretHeaders(
   headers: HeadersInit | undefined,
-  clientSecret: string,
+  clientSecret: ResolvedClientSecret,
 ): Headers {
   const nextHeaders = new Headers(headers);
-  if (clientSecret) {
-    nextHeaders.set('Authorization', `Bearer ${clientSecret}`);
-    nextHeaders.set('x-api-key', clientSecret);
+  if (clientSecret.secret) {
+    nextHeaders.set('Authorization', `Bearer ${clientSecret.secret}`);
+    nextHeaders.set('x-api-key', clientSecret.secret);
   } else {
     nextHeaders.delete('Authorization');
     nextHeaders.delete('x-api-key');
   }
+
+  if (clientSecret.organizationId) {
+    nextHeaders.set('organization-id', clientSecret.organizationId);
+  } else {
+    nextHeaders.delete('organization-id');
+  }
+
   return nextHeaders;
+}
+
+type CreateFetchWithClientSecretRefreshOptions = {
+  fetchFn?: typeof fetch;
+  getCurrentClientSecret: () => ResolvedClientSecret;
+  refreshClientSecret: () => Promise<ResolvedClientSecret>;
+  onRefreshError?: (error: unknown) => void;
+};
+
+export function createFetchWithClientSecretRefresh({
+  fetchFn = fetch,
+  getCurrentClientSecret,
+  refreshClientSecret,
+  onRefreshError,
+}: CreateFetchWithClientSecretRefreshOptions): typeof fetch {
+  return async (input, init) => {
+    const requestWithSecret = (clientSecret: ResolvedClientSecret) => {
+      return fetchFn(input, {
+        ...init,
+        headers: withClientSecretHeaders(init?.headers, clientSecret),
+      });
+    };
+
+    const response = await requestWithSecret(getCurrentClientSecret());
+    if (response.status !== 401) {
+      return response;
+    }
+
+    try {
+      const refreshedClientSecret = await refreshClientSecret();
+      return await requestWithSecret(refreshedClientSecret);
+    } catch (refreshError) {
+      onRefreshError?.(refreshError);
+      return response;
+    }
+  };
 }
 
 function applyOptimisticValues(
@@ -601,11 +649,13 @@ export function applyStreamEvent(
 const StreamSession = ({
   children,
   apiKey,
+  organizationId,
   apiUrl,
   assistantId,
 }: {
   children: ReactNode;
   apiKey: string;
+  organizationId?: string;
   apiUrl: string;
   assistantId: string;
 }) => {
@@ -616,10 +666,16 @@ const StreamSession = ({
   const [contextUsageByAgentKey, setContextUsageByAgentKey] =
     useState<ThreadContextUsageByAgentKey>({});
   const [runtimeClientSecret, setRuntimeClientSecret] = useState(apiKey);
+  const [runtimeOrganizationId, setRuntimeOrganizationId] = useState<
+    string | undefined
+  >(organizationId);
   const abortRef = useRef<AbortController | null>(null);
   const submitRef = useRef<StreamContextType['submit'] | null>(null);
   const runtimeClientSecretRef = useRef(apiKey);
-  const refreshClientSecretPromiseRef = useRef<Promise<string> | null>(null);
+  const runtimeOrganizationIdRef = useRef<string | undefined>(organizationId);
+  const refreshClientSecretPromiseRef = useRef<
+    Promise<ResolvedClientSecret> | null
+  >(null);
   const lastStreamOptionsRef = useRef<
     Pick<StreamSubmitOptions, 'streamMode' | 'streamSubgraphs' | 'streamResumable'>
   >({});
@@ -631,9 +687,12 @@ const StreamSession = ({
   const { isParentAvailable, sendCommand, sendEvent } = useParentMessenger();
 
   useEffect(() => {
+    const nextOrganizationId = organizationId?.trim();
     runtimeClientSecretRef.current = apiKey;
+    runtimeOrganizationIdRef.current = nextOrganizationId || undefined;
     setRuntimeClientSecret(apiKey);
-  }, [apiKey]);
+    setRuntimeOrganizationId(nextOrganizationId || undefined);
+  }, [apiKey, organizationId]);
 
   // Notify the host page when the active thread changes. The host maps
   // `public_event` -> `chatkit.<event>` so sending ['thread.change', {...}]
@@ -656,61 +715,58 @@ const StreamSession = ({
     }
   }, [threadId]);
 
-  const refreshClientSecret = useCallback(async (): Promise<string> => {
-    if (!isParentAvailable) {
-      throw new Error('[chatkit-ui] Parent window is not available for client secret refresh.');
-    }
-    if (refreshClientSecretPromiseRef.current) {
-      return refreshClientSecretPromiseRef.current;
-    }
-
-    const refreshPromise = (async () => {
-      const currentSecret = runtimeClientSecretRef.current.trim();
-      const response = await sendCommand('onGetClientSecret', currentSecret || null);
-      const nextSecret = typeof response === 'string' ? response.trim() : '';
-
-      if (!nextSecret) {
-        throw new Error('[chatkit-ui] Parent returned an invalid client secret.');
+  const refreshClientSecret = useCallback(
+    async (): Promise<ResolvedClientSecret> => {
+      if (!isParentAvailable) {
+        throw new Error('[chatkit-ui] Parent window is not available for client secret refresh.');
+      }
+      if (refreshClientSecretPromiseRef.current) {
+        return refreshClientSecretPromiseRef.current;
       }
 
-      runtimeClientSecretRef.current = nextSecret;
-      setRuntimeClientSecret(nextSecret);
-      return nextSecret;
-    })();
+      const refreshPromise = (async () => {
+        const currentSecret = runtimeClientSecretRef.current.trim();
+        const response = await sendCommand('onGetClientSecret', currentSecret || null);
+        const nextClientSecret = normalizeClientSecretResult(
+          response,
+          runtimeOrganizationIdRef.current,
+        );
 
-    refreshClientSecretPromiseRef.current = refreshPromise;
-    try {
-      return await refreshPromise;
-    } finally {
-      if (refreshClientSecretPromiseRef.current === refreshPromise) {
-        refreshClientSecretPromiseRef.current = null;
-      }
-    }
-  }, [isParentAvailable, sendCommand]);
+        runtimeClientSecretRef.current = nextClientSecret.secret;
+        runtimeOrganizationIdRef.current = nextClientSecret.organizationId;
+        setRuntimeClientSecret(nextClientSecret.secret);
+        setRuntimeOrganizationId(nextClientSecret.organizationId);
+        return nextClientSecret;
+      })();
 
-  const fetchWithClientSecretRefresh = useCallback<typeof fetch>(
-    async (input, init) => {
-      const requestWithSecret = (secret: string) => {
-        return fetch(input, {
-          ...init,
-          headers: withClientSecretHeaders(init?.headers, secret),
-        });
-      };
-
-      const currentSecret = runtimeClientSecretRef.current.trim();
-      const response = await requestWithSecret(currentSecret);
-      if (response.status !== 401) {
-        return response;
-      }
-
+      refreshClientSecretPromiseRef.current = refreshPromise;
       try {
-        const refreshedSecret = await refreshClientSecret();
-        return await requestWithSecret(refreshedSecret);
-      } catch (refreshError) {
-        console.warn('[chatkit-ui] Failed to refresh client secret:', refreshError);
-        return response;
+        return await refreshPromise;
+      } finally {
+        if (refreshClientSecretPromiseRef.current === refreshPromise) {
+          refreshClientSecretPromiseRef.current = null;
+        }
       }
     },
+    [isParentAvailable, sendCommand],
+  );
+
+  const fetchWithClientSecretRefresh = useMemo(
+    () =>
+      createFetchWithClientSecretRefresh({
+        getCurrentClientSecret: () => {
+          const currentSecret = runtimeClientSecretRef.current.trim();
+          const currentOrganizationId = runtimeOrganizationIdRef.current?.trim();
+
+          return currentOrganizationId
+            ? { secret: currentSecret, organizationId: currentOrganizationId }
+            : { secret: currentSecret };
+        },
+        refreshClientSecret,
+        onRefreshError: (refreshError) => {
+          console.warn('[chatkit-ui] Failed to refresh client secret:', refreshError);
+        },
+      }),
     [refreshClientSecret],
   );
 
@@ -1039,6 +1095,7 @@ const StreamSession = ({
     apiUrl,
     assistantId,
     apiKey: runtimeClientSecret,
+    organizationId: runtimeOrganizationId,
     threadId: threadId ?? null,
     contextUsageByAgentKey,
     values,
@@ -1062,13 +1119,15 @@ const StreamSession = ({
 export const StreamProvider: React.FC<{
   children: ReactNode;
   apiKey?: string;
+  organizationId?: string;
   apiUrl?: string;
   xpertId?: string;
-}> = ({ children, apiKey, apiUrl, xpertId }) => {
+}> = ({ children, apiKey, organizationId, apiUrl, xpertId }) => {
   return (
     <StreamSession
       apiKey={apiKey ?? ''}
-      apiUrl={apiUrl ?? defaultApiUrl }
+      organizationId={organizationId}
+      apiUrl={apiUrl ?? defaultApiUrl}
       assistantId={xpertId ?? 'your-xpert-id'}
     >
       {children}

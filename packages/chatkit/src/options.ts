@@ -283,8 +283,12 @@ type CustomApiConfig = {
 type HostedApiConfig = {
   /**
    * Function to get a client token or refresh if the current token is expired.
+   * Returning an object also allows ChatKit to send the active organization id
+   * as the `organization-id` header on hosted API requests.
    */
-  getClientSecret: (currentClientSecret: string | null) => Promise<string>;
+  getClientSecret: (
+    currentClientSecret: string | null,
+  ) => Promise<ChatKitClientSecretResult>;
 
   /**
    * The base URL for the XpertAI platform hosted API. Used for accessing xpert agents
@@ -294,6 +298,15 @@ type HostedApiConfig = {
 
   xpertId?: string;
 };
+
+export type ChatKitClientSecretObject = {
+  secret: string;
+  organizationId?: string;
+};
+
+export type ChatKitClientSecretResult =
+  | string
+  | ChatKitClientSecretObject;
 
 export type ChatKitRequestContext = {
   /**

@@ -27,7 +27,7 @@ http://localhost:5175
 - `frameUrl`: `http://localhost:5173`
 - `apiUrl`: `/api/ai/`, resolved against the ChatKit frame origin
 - `xpertId`: read from `frontend/.env`
-- `getClientSecret()`: calls `/api/create-session` and expects `{ client_secret }`
+- `getClientSecret()`: calls `/api/create-session` and can return the legacy `client_secret` string or map the response to `{ secret, organizationId }`
 
 By default:
 
