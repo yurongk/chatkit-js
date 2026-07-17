@@ -1,6 +1,6 @@
 {
   "name": "@xpert-ai/chatkit-types",
-  "version": "0.0.15",
+  "version": "0.4.6",
   "description": "Type definitions for the ChatKit.",
   "sideEffects": false,
   "type": "module",
@@ -13,6 +13,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./constants": {
+      "types": "./dist/constants.d.ts",
+      "import": "./dist/constants.js",
+      "require": "./dist/constants.cjs",
+      "default": "./dist/constants.js"
     }
   },
   "files": [

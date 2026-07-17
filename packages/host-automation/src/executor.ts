@@ -1,0 +1,2052 @@
+import {
+  HOST_PAGE_AUTOMATION_TOOL_NAMES,
+  type HostPageAutomationElementSnapshot,
+  type HostPageAutomationOptions,
+  type HostPageAutomationToolName,
+  type HostPageAutomationVisualEffectContext,
+  type HostPageReadableContent,
+  type HostPageSnapshot,
+} from './types';
+import {
+  createHostPageReadableContentIndex,
+  extractHostPageReadableContent,
+  readHostPageReadableContent,
+  type HostPageReadParams,
+} from './readable-content';
+
+type Point = { x: number; y: number };
+
+type ResolvableTargetParams = {
+  ref?: unknown;
+  axRef?: unknown;
+  selector?: unknown;
+  role?: unknown;
+  name?: unknown;
+  text?: unknown;
+  testId?: unknown;
+  x?: unknown;
+  y?: unknown;
+  coordinateSpace?: unknown;
+  targetText?: unknown;
+};
+
+type FillParams = ResolvableTargetParams & {
+  value?: unknown;
+};
+
+type PressParams = ResolvableTargetParams & {
+  key?: unknown;
+};
+
+type HoverParams = ResolvableTargetParams;
+
+type FocusParams = ResolvableTargetParams;
+
+type PointerParams = ResolvableTargetParams & {
+  action?: unknown;
+  toX?: unknown;
+  toY?: unknown;
+  button?: unknown;
+  expectedAfterClick?: unknown;
+};
+
+type ExpectedAfterClickFieldContains = {
+  type: 'field_contains';
+  field: string;
+  value: string;
+};
+
+type WaitForParams = ResolvableTargetParams & {
+  state?: unknown;
+  timeoutSeconds?: unknown;
+};
+
+type SelectParams = ResolvableTargetParams & {
+  value?: unknown;
+  values?: unknown;
+};
+
+type ScrollParams = ResolvableTargetParams & {
+  deltaX?: unknown;
+  deltaY?: unknown;
+  x?: unknown;
+  y?: unknown;
+};
+
+type ReadParams = {
+  blockId?: unknown;
+  query?: unknown;
+  page?: unknown;
+  pageSize?: unknown;
+  maxChars?: unknown;
+};
+
+type NavigateParams = {
+  url?: unknown;
+};
+
+type Actionability = {
+  visible: boolean;
+  enabled: boolean;
+  receivesEvents: boolean;
+  actionable: boolean;
+  center?: Point;
+  hitTarget?: Element;
+  hitStack: Element[];
+  safeClickPoints: Point[];
+  occludedBy?: Element;
+};
+
+class HostPageAutomationStructuredError extends Error {
+  constructor(
+    message: string,
+    readonly details: Record<string, unknown>,
+  ) {
+    super(message);
+  }
+}
+
+const AUTOMATION_TOOL_NAME_SET = new Set<string>(
+  HOST_PAGE_AUTOMATION_TOOL_NAMES,
+);
+
+const CANDIDATE_SELECTOR = [
+  'a[href]',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'summary',
+  '[role]',
+  '[tabindex]:not([tabindex="-1"])',
+  '[contenteditable=""]',
+  '[contenteditable="true"]',
+  '[aria-label]',
+  '[data-testid]',
+  '[data-test-id]',
+  '[data-qa]',
+].join(',');
+
+const MAX_SNAPSHOT_ELEMENTS = 100;
+const WAIT_FOR_DEFAULT_TIMEOUT_MS = 10_000;
+const WAIT_FOR_MAX_TIMEOUT_MS = 60_000;
+
+export function isHostPageAutomationToolName(
+  value: string,
+): value is HostPageAutomationToolName {
+  return AUTOMATION_TOOL_NAME_SET.has(value);
+}
+
+function getOwnerDocument(root: Document | ShadowRoot): Document {
+  return root instanceof Document ? root : root.ownerDocument;
+}
+
+function getWindow(root: Document | ShadowRoot): Window {
+  return getOwnerDocument(root).defaultView ?? window;
+}
+
+function normalizeParams(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${field} must be a non-empty string.`);
+  }
+
+  return value;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function readCoordinateSpace(value: unknown) {
+  return value === 'viewport_normalized'
+    ? 'viewport_normalized'
+    : 'viewport-css-px';
+}
+
+function readPoint(
+  root: Document | ShadowRoot,
+  params: ResolvableTargetParams,
+): Point {
+  const x = readNumber(params.x, 'x');
+  const y = readNumber(params.y, 'y');
+  if (readCoordinateSpace(params.coordinateSpace) === 'viewport_normalized') {
+    const view = getWindow(root);
+    return {
+      x: Number((x * view.innerWidth).toFixed(3)),
+      y: Number((y * view.innerHeight).toFixed(3)),
+    };
+  }
+
+  return { x, y };
+}
+
+function readOptionalInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value)
+    ? value
+    : undefined;
+}
+
+function readNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${field} must be a finite number.`);
+  }
+
+  return value;
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function readOptionalEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+): T | undefined {
+  return typeof value === 'string' &&
+    (allowed as readonly string[]).includes(value)
+    ? (value as T)
+    : undefined;
+}
+
+function readStringList(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return [value];
+  }
+
+  if (
+    Array.isArray(value) &&
+    value.every((entry) => typeof entry === 'string')
+  ) {
+    return value;
+  }
+
+  throw new Error('value or values must be a string or an array of strings.');
+}
+
+function getElementText(element: Element): string | undefined {
+  const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, 160) : undefined;
+}
+
+function getElementOwnText(element: Element): string | undefined {
+  const text = Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? '')
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text ? text.slice(0, 160) : undefined;
+}
+
+function getElementValue(element: Element): string | undefined {
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  ) {
+    return element.value;
+  }
+
+  return undefined;
+}
+
+function isChoiceInput(element: Element): element is HTMLInputElement {
+  return (
+    element instanceof HTMLInputElement &&
+    (element.type === 'checkbox' || element.type === 'radio')
+  );
+}
+
+function getControlLabels(element: Element): HTMLLabelElement[] {
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLSelectElement ||
+    element instanceof HTMLTextAreaElement
+  ) {
+    return Array.from(element.labels ?? []);
+  }
+
+  return [];
+}
+
+function getTextByElementIds(element: Element, attribute: string): string[] {
+  const ids = element.getAttribute(attribute)?.trim().split(/\s+/) ?? [];
+  return ids
+    .map((id) => element.ownerDocument.getElementById(id))
+    .filter((target): target is HTMLElement => Boolean(target))
+    .map((target) => getElementText(target))
+    .filter((text): text is string => Boolean(text));
+}
+
+function getExplicitControlLabel(element: Element): string | undefined {
+  const ariaLabelledBy = getTextByElementIds(element, 'aria-labelledby');
+  if (ariaLabelledBy.length > 0) {
+    return ariaLabelledBy.join(' ').slice(0, 160);
+  }
+
+  const labels = getControlLabels(element)
+    .map((label) => getElementText(label))
+    .filter((text): text is string => Boolean(text));
+  if (labels.length > 0) {
+    return labels.join(' ').slice(0, 160);
+  }
+
+  return undefined;
+}
+
+function getAdjacentTextAfter(element: Element): string | undefined {
+  const segments: string[] = [];
+  let node = element.nextSibling;
+
+  while (node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = (node.textContent ?? '').replace(/\s+/g, ' ').trim();
+      if (text) {
+        segments.push(text);
+      }
+    } else if (
+      node.nodeType === Node.ELEMENT_NODE &&
+      (node as Element).tagName.toLowerCase() === 'br'
+    ) {
+      break;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const siblingElement = node as Element;
+      if (
+        siblingElement.matches(
+          'input,textarea,select,button,a[href],[role="button"],[role="link"]',
+        )
+      ) {
+        break;
+      }
+      const text = getElementText(siblingElement);
+      if (text) {
+        segments.push(text);
+      }
+      break;
+    }
+
+    if (segments.join(' ').length >= 120) {
+      break;
+    }
+    node = node.nextSibling;
+  }
+
+  const text = segments.join(' ').replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, 160) : undefined;
+}
+
+function getSameRowText(
+  element: Element,
+  side: 'left' | 'right',
+): string | undefined {
+  const doc = element.ownerDocument;
+  const body = doc.body;
+  if (!body) {
+    return undefined;
+  }
+
+  const targetRect = element.getBoundingClientRect();
+  if (targetRect.width <= 0 || targetRect.height <= 0) {
+    return undefined;
+  }
+
+  const targetCenterY = targetRect.top + targetRect.height / 2;
+  const candidates: Array<{ text: string; score: number }> = [];
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_ELEMENT);
+  let node = walker.nextNode();
+
+  while (node) {
+    const candidate = node as Element;
+    if (
+      candidate !== element &&
+      !candidate.contains(element) &&
+      isTextOnlyLabelCandidate(candidate)
+    ) {
+      const rect = candidate.getBoundingClientRect();
+      const text = getElementOwnText(candidate) ?? getElementText(candidate);
+      if (text) {
+        const centerY = rect.top + rect.height / 2;
+        const sameRow =
+          Math.abs(centerY - targetCenterY) <=
+          Math.max(28, targetRect.height * 1.25);
+        const distance =
+          side === 'left'
+            ? targetRect.left - rect.right
+            : rect.left - targetRect.right;
+
+        if (sameRow && distance >= -8 && distance <= 240) {
+          candidates.push({
+            text,
+            score: Math.abs(distance) + Math.abs(centerY - targetCenterY),
+          });
+        }
+      }
+    }
+    node = walker.nextNode();
+  }
+
+  return candidates.sort((left, right) => left.score - right.score)[0]?.text;
+}
+
+function getControlLabel(element: Element): string | undefined {
+  if (
+    !(
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLSelectElement ||
+      element instanceof HTMLTextAreaElement
+    )
+  ) {
+    return undefined;
+  }
+
+  const explicit = getExplicitControlLabel(element);
+  if (explicit) {
+    return explicit;
+  }
+
+  if (isChoiceInput(element)) {
+    return (
+      getSameRowText(element, 'right') ??
+      getAdjacentTextAfter(element) ??
+      getNearbyText(element)[0]
+    );
+  }
+
+  return getSameRowText(element, 'left') ?? getNearbyText(element)[0];
+}
+
+function isWeakControlName(element: Element, name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  if (element instanceof HTMLInputElement && element.type === 'radio') {
+    return normalized === 'radio' || normalized === 'radio button';
+  }
+  if (element instanceof HTMLInputElement && element.type === 'checkbox') {
+    return normalized === 'checkbox' || normalized === 'check box';
+  }
+  if (element instanceof HTMLSelectElement) {
+    return (
+      normalized === 'select' ||
+      normalized === 'select menu' ||
+      normalized === 'combobox' ||
+      normalized === 'combo box'
+    );
+  }
+  return false;
+}
+
+function getElementName(element: Element): string | undefined {
+  const controlLabel = getControlLabel(element);
+  const ariaLabel = element.getAttribute('aria-label');
+  if (ariaLabel?.trim() && !isWeakControlName(element, ariaLabel)) {
+    return ariaLabel.trim();
+  }
+
+  const title = element.getAttribute('title');
+  if (title?.trim() && !isWeakControlName(element, title)) {
+    return title.trim();
+  }
+
+  if (controlLabel) {
+    return controlLabel;
+  }
+
+  const nearbyText = getNearbyText(element)[0];
+  if (nearbyText) {
+    return nearbyText;
+  }
+
+  return getElementText(element);
+}
+
+function isTextOnlyLabelCandidate(element: Element): boolean {
+  if (!(element instanceof HTMLElement || element instanceof SVGElement)) {
+    return false;
+  }
+
+  if (!isVisibleCandidate(element)) {
+    return false;
+  }
+
+  if (
+    element.matches(
+      'input,textarea,select,button,a[href],[role="button"],[role="link"]',
+    )
+  ) {
+    return false;
+  }
+
+  const text = getElementOwnText(element) ?? getElementText(element);
+  return Boolean(text && text.length <= 120);
+}
+
+function getChoiceGroupLabel(element: Element): string | undefined {
+  if (!isChoiceInput(element)) {
+    return undefined;
+  }
+
+  const fieldset = element.closest('fieldset');
+  const legend = fieldset?.querySelector('legend');
+  const legendText = legend ? getElementText(legend) : undefined;
+  if (legendText) {
+    return legendText;
+  }
+
+  const doc = element.ownerDocument;
+  const body = doc.body;
+  if (!body) {
+    return undefined;
+  }
+
+  const targetRect = element.getBoundingClientRect();
+  if (targetRect.width <= 0 || targetRect.height <= 0) {
+    return undefined;
+  }
+
+  const targetCenterX = targetRect.left + targetRect.width / 2;
+  const candidates: Array<{ text: string; score: number }> = [];
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_ELEMENT);
+  let node = walker.nextNode();
+
+  while (node) {
+    const candidate = node as Element;
+    if (
+      candidate !== element &&
+      !candidate.contains(element) &&
+      candidate.matches('legend,strong,b,[role="heading"],h1,h2,h3,h4,h5,h6') &&
+      isTextOnlyLabelCandidate(candidate)
+    ) {
+      const rect = candidate.getBoundingClientRect();
+      const text = getElementOwnText(candidate) ?? getElementText(candidate);
+      if (text && rect.bottom <= targetRect.top + 8) {
+        const verticalDistance = targetRect.top - rect.bottom;
+        const centerX = rect.left + rect.width / 2;
+        const aligned =
+          verticalDistance <= 160 &&
+          centerX >= targetRect.left - 120 &&
+          centerX <= targetRect.right + 320;
+
+        if (aligned) {
+          candidates.push({
+            text,
+            score: verticalDistance + Math.abs(centerX - targetCenterX) * 0.25,
+          });
+        }
+      }
+    }
+    node = walker.nextNode();
+  }
+
+  return candidates.sort((left, right) => left.score - right.score)[0]?.text;
+}
+
+function getSelectOptions(
+  element: Element,
+): HostPageAutomationElementSnapshot['options'] | undefined {
+  if (!(element instanceof HTMLSelectElement)) {
+    return undefined;
+  }
+
+  const options = Array.from(element.options).map((option) => {
+    const label = (option.label || option.textContent || option.value)
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      label: (label || option.value).slice(0, 160),
+      value: option.value,
+      selected: option.selected || undefined,
+      disabled: option.disabled || undefined,
+    };
+  });
+
+  return options.length ? options : undefined;
+}
+
+function getSelectedLabel(element: Element): string | undefined {
+  if (!(element instanceof HTMLSelectElement)) {
+    return undefined;
+  }
+
+  const selected = element.selectedOptions[0];
+  const label = selected
+    ? (selected.label || selected.textContent || selected.value)
+        .replace(/\s+/g, ' ')
+        .trim()
+    : undefined;
+
+  return label ? label.slice(0, 160) : undefined;
+}
+
+function getNearbyText(element: Element): string[] {
+  const doc = element.ownerDocument;
+  const body = doc.body;
+  if (!body) {
+    return [];
+  }
+
+  const targetRect = element.getBoundingClientRect();
+  if (targetRect.width <= 0 || targetRect.height <= 0) {
+    return [];
+  }
+
+  const targetCenterY = targetRect.top + targetRect.height / 2;
+  const targetCenterX = targetRect.left + targetRect.width / 2;
+  const candidates: Array<{ text: string; score: number }> = [];
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_ELEMENT);
+  let node = walker.nextNode();
+
+  while (node) {
+    const candidate = node as Element;
+    if (
+      candidate !== element &&
+      !candidate.contains(element) &&
+      isTextOnlyLabelCandidate(candidate)
+    ) {
+      const rect = candidate.getBoundingClientRect();
+      const text = getElementOwnText(candidate) ?? getElementText(candidate);
+      if (text) {
+        const centerY = rect.top + rect.height / 2;
+        const centerX = rect.left + rect.width / 2;
+        const sameRow =
+          rect.right <= targetRect.left + 12 &&
+          Math.abs(centerY - targetCenterY) <=
+            Math.max(28, targetRect.height * 1.25);
+        const sameRowRight =
+          rect.left >= targetRect.right - 8 &&
+          rect.left - targetRect.right <= 240 &&
+          Math.abs(centerY - targetCenterY) <=
+            Math.max(28, targetRect.height * 1.25);
+        const above =
+          rect.bottom <= targetRect.top + 8 &&
+          targetRect.top - rect.bottom <= 80 &&
+          centerX >= targetRect.left - 80 &&
+          centerX <= targetRect.right + 80;
+
+        if (sameRow || sameRowRight || above) {
+          const distance = sameRow
+            ? targetRect.left - rect.right + Math.abs(centerY - targetCenterY)
+            : sameRowRight
+              ? rect.left - targetRect.right + Math.abs(centerY - targetCenterY)
+              : targetRect.top -
+                rect.bottom +
+                Math.abs(centerX - targetCenterX);
+          candidates.push({
+            text,
+            score: distance + (sameRow ? 0 : sameRowRight ? 5 : 100),
+          });
+        }
+      }
+    }
+
+    node = walker.nextNode();
+  }
+
+  const seen = new Set<string>();
+  return candidates
+    .sort((left, right) => left.score - right.score)
+    .map((candidate) => candidate.text)
+    .filter((text) => {
+      if (seen.has(text)) {
+        return false;
+      }
+      seen.add(text);
+      return true;
+    })
+    .slice(0, 4);
+}
+
+function getElementTestId(element: Element): string | undefined {
+  return (
+    element.getAttribute('data-testid') ??
+    element.getAttribute('data-test-id') ??
+    element.getAttribute('data-qa') ??
+    undefined
+  );
+}
+
+function inferRole(element: Element): string | undefined {
+  const explicitRole = element.getAttribute('role');
+  if (explicitRole?.trim()) {
+    return explicitRole.trim();
+  }
+
+  const tag = element.tagName.toLowerCase();
+  if (tag === 'button') return 'button';
+  if (tag === 'a') return 'link';
+  if (tag === 'textarea') return 'textbox';
+  if (tag === 'select') return 'combobox';
+  if (tag === 'summary') return 'button';
+
+  if (element instanceof HTMLInputElement) {
+    switch (element.type) {
+      case 'checkbox':
+        return 'checkbox';
+      case 'radio':
+        return 'radio';
+      case 'button':
+      case 'submit':
+      case 'reset':
+        return 'button';
+      default:
+        return 'textbox';
+    }
+  }
+
+  return undefined;
+}
+
+function isDisabled(element: Element): boolean | undefined {
+  if (
+    element instanceof HTMLButtonElement ||
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLSelectElement ||
+    element instanceof HTMLTextAreaElement
+  ) {
+    return element.disabled || undefined;
+  }
+
+  return element.getAttribute('aria-disabled') === 'true' || undefined;
+}
+
+function isChecked(element: Element): boolean | undefined {
+  return element instanceof HTMLInputElement &&
+    (element.type === 'checkbox' || element.type === 'radio')
+    ? element.checked
+    : undefined;
+}
+
+function getElementCenter(element: Element): Point | undefined {
+  const rect = getGlobalRect(element);
+  if (rect.width <= 0 || rect.height <= 0) {
+    return undefined;
+  }
+
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2,
+  };
+}
+
+function summarizeElement(element: Element) {
+  return {
+    tag: element.tagName.toLowerCase(),
+    role: inferRole(element),
+    name: getElementName(element),
+    selector: createSelector(element),
+  };
+}
+
+function isVisibleCandidate(element: Element): boolean {
+  if (!(element instanceof HTMLElement || element instanceof SVGElement)) {
+    return false;
+  }
+
+  if (element instanceof HTMLElement && element.hidden) {
+    return false;
+  }
+
+  const view = element.ownerDocument.defaultView;
+  const style = view?.getComputedStyle(element);
+  if (
+    style &&
+    (style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.opacity === '0')
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isCandidateElement(element: Element): boolean {
+  return element.matches(CANDIDATE_SELECTOR) && isVisibleCandidate(element);
+}
+
+function isElementEnabled(element: Element): boolean {
+  return isDisabled(element) !== true;
+}
+
+function isActionableCandidate(element: Element): boolean {
+  if (isCandidateElement(element)) {
+    return true;
+  }
+
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+
+  const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+  if (style?.cursor === 'pointer') {
+    return isVisibleCandidate(element);
+  }
+
+  return Boolean(element.onclick) && isVisibleCandidate(element);
+}
+
+function getGlobalRect(element: Element) {
+  const rect = element.getBoundingClientRect();
+  let x = rect.left;
+  let y = rect.top;
+  let frameElement: Element | null = null;
+
+  try {
+    frameElement = element.ownerDocument.defaultView?.frameElement ?? null;
+  } catch {
+    frameElement = null;
+  }
+
+  while (frameElement) {
+    const frameRect = frameElement.getBoundingClientRect();
+    x += frameRect.left;
+    y += frameRect.top;
+    try {
+      frameElement =
+        frameElement.ownerDocument.defaultView?.frameElement ?? null;
+    } catch {
+      frameElement = null;
+    }
+  }
+
+  return {
+    x,
+    y,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function createSelector(element: Element): string | undefined {
+  const escapeSelectorValue = (value: string) =>
+    typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(value)
+      : value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+
+  if (element.id) {
+    return `#${escapeSelectorValue(element.id)}`;
+  }
+
+  for (const attribute of ['data-testid', 'data-test-id', 'data-qa']) {
+    const testId = element.getAttribute(attribute);
+    if (testId) {
+      return `[${attribute}="${escapeSelectorValue(testId)}"]`;
+    }
+  }
+
+  const name = element.getAttribute('name');
+  if (name) {
+    return `${element.tagName.toLowerCase()}[name="${escapeSelectorValue(
+      name,
+    )}"]`;
+  }
+
+  return element.tagName.toLowerCase();
+}
+
+function getViewportPoint(element: Element): Point | undefined {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return undefined;
+  }
+
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  };
+}
+
+function getElementsFromPoint(doc: Document, point: Point): Element[] {
+  if (typeof doc.elementsFromPoint === 'function') {
+    return doc.elementsFromPoint(point.x, point.y);
+  }
+
+  if (typeof doc.elementFromPoint !== 'function') {
+    return [];
+  }
+
+  const element = doc.elementFromPoint(point.x, point.y);
+  return element ? [element] : [];
+}
+
+function canHitTest(doc: Document): boolean {
+  return (
+    typeof doc.elementsFromPoint === 'function' ||
+    typeof doc.elementFromPoint === 'function'
+  );
+}
+
+function containsOrEquals(parent: Element, child: Element): boolean {
+  return parent === child || parent.contains(child);
+}
+
+function findActionableAncestor(element: Element): Element {
+  let current: Element | null = element;
+  while (current) {
+    if (isActionableCandidate(current)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+
+  return element;
+}
+
+function normalizeSemanticText(value: string | undefined): string {
+  return (value ?? '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function getReceivesEventsPoint(element: Element): Point | undefined {
+  return getReceivesEventsPoints(element)[0];
+}
+
+function getReceivesEventsPoints(element: Element): Point[] {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return [];
+  }
+
+  const doc = element.ownerDocument;
+  const points = [
+    { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+    { x: rect.left + Math.min(8, rect.width / 2), y: rect.top + rect.height / 2 },
+    { x: rect.right - Math.min(8, rect.width / 2), y: rect.top + rect.height / 2 },
+    { x: rect.left + rect.width / 2, y: rect.top + Math.min(8, rect.height / 2) },
+    { x: rect.left + rect.width / 2, y: rect.bottom - Math.min(8, rect.height / 2) },
+  ];
+
+  return points.filter((point) => {
+    const hitTarget = getElementsFromPoint(doc, point)[0];
+    return hitTarget ? containsOrEquals(element, hitTarget) : false;
+  });
+}
+
+function getGlobalPoint(element: Element, point: Point): Point {
+  const rect = element.getBoundingClientRect();
+  const globalRect = getGlobalRect(element);
+  return {
+    x: point.x + globalRect.x - rect.left,
+    y: point.y + globalRect.y - rect.top,
+  };
+}
+
+function findSemanticVisibleFallback(
+  root: Document | ShadowRoot,
+  requested: Element,
+): Element | null {
+  const requestedRole = inferRole(requested);
+  const requestedName = normalizeSemanticText(getElementName(requested));
+  if (!requestedName) {
+    return null;
+  }
+
+  const candidates = collectElements(root)
+    .filter((candidate) => candidate !== requested)
+    .filter((candidate) => {
+      const candidateRole = inferRole(candidate);
+      const candidateName = normalizeSemanticText(getElementName(candidate));
+      if (requestedRole && candidateRole && requestedRole !== candidateRole) {
+        return false;
+      }
+
+      return (
+        candidateName.includes(requestedName) ||
+        requestedName.includes(candidateName)
+      );
+    })
+    .map((candidate) => ({
+      candidate,
+      point: getReceivesEventsPoint(candidate),
+      rect: getGlobalRect(candidate),
+    }))
+    .filter((entry): entry is { candidate: Element; point: Point; rect: ReturnType<typeof getGlobalRect> } =>
+      Boolean(entry.point),
+    )
+    .sort((left, right) => right.rect.y - left.rect.y);
+
+  return candidates[0]?.candidate ?? null;
+}
+
+function getActionability(element: Element): Actionability {
+  const doc = element.ownerDocument;
+  const center = getViewportPoint(element);
+  const visible = isVisibleCandidate(element) && Boolean(center);
+  const enabled = isElementEnabled(element);
+  const hitStack = center ? getElementsFromPoint(doc, center) : [];
+  const hitTarget = hitStack[0];
+  const safeClickPoints = getReceivesEventsPoints(element).map((point) =>
+    getGlobalPoint(element, point),
+  );
+  const receivesEvents = safeClickPoints.length > 0;
+
+  return {
+    visible,
+    enabled,
+    receivesEvents,
+    actionable: visible && enabled && receivesEvents,
+    center: getElementCenter(element),
+    hitTarget,
+    hitStack,
+    safeClickPoints,
+    occludedBy: visible && enabled && !receivesEvents ? hitTarget : undefined,
+  };
+}
+
+function findBySemanticTarget(
+  root: Document | ShadowRoot,
+  params: ResolvableTargetParams,
+): Element | null {
+  const testId = readOptionalString(params.testId);
+  if (testId) {
+    const escaped =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? CSS.escape(testId)
+        : testId.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    const element = root.querySelector(
+      `[data-testid="${escaped}"],[data-test-id="${escaped}"],[data-qa="${escaped}"]`,
+    );
+    if (element) {
+      return element;
+    }
+  }
+
+  const role = readOptionalString(params.role)?.toLowerCase();
+  const name = readOptionalString(params.name)?.toLowerCase();
+  const text = readOptionalString(params.text)?.toLowerCase();
+  if (!role && !name && !text) {
+    return null;
+  }
+
+  const elements = collectElements(root);
+  return (
+    elements.find((element) => {
+      const elementRole = inferRole(element)?.toLowerCase();
+      const elementName = getElementName(element)?.toLowerCase();
+      const elementText = getElementText(element)?.toLowerCase();
+
+      if (role && elementRole !== role) {
+        return false;
+      }
+      if (name && !elementName?.includes(name)) {
+        return false;
+      }
+      if (text && !elementText?.includes(text)) {
+        return false;
+      }
+      return true;
+    }) ?? null
+  );
+}
+
+function getElementHitTargetText(element: Element): string {
+  return [
+    getElementName(element),
+    getControlLabel(element),
+    getChoiceGroupLabel(element),
+    getElementText(element),
+    getElementValue(element),
+  ]
+    .filter((text): text is string => Boolean(text))
+    .join(' ')
+    .toLowerCase();
+}
+
+function elementOrAncestorMatchesText(
+  element: Element,
+  targetText: string,
+): boolean {
+  const expected = targetText.trim().toLowerCase();
+  let current: Element | null = element;
+  let depth = 0;
+
+  while (current && depth < 5) {
+    const tag = current.tagName.toLowerCase();
+    if (tag === 'body' || tag === 'html') {
+      return false;
+    }
+
+    if (getElementHitTargetText(current).includes(expected)) {
+      return true;
+    }
+
+    current = current.parentElement;
+    depth += 1;
+  }
+
+  return false;
+}
+
+function readExpectedAfterClick(
+  value: unknown,
+): ExpectedAfterClickFieldContains | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    candidate.type === 'field_contains' &&
+    typeof candidate.field === 'string' &&
+    candidate.field.trim() &&
+    typeof candidate.value === 'string'
+  ) {
+    return {
+      type: 'field_contains',
+      field: candidate.field,
+      value: candidate.value,
+    };
+  }
+
+  return undefined;
+}
+
+function findFieldByLabel(
+  root: Document | ShadowRoot,
+  field: string,
+): Element | undefined {
+  const expected = field.trim().toLowerCase();
+  return Array.from(root.querySelectorAll('input,textarea,select')).find(
+    (element) => {
+      const labels = [
+        getControlLabel(element),
+        getElementName(element),
+        element.getAttribute('name') ?? undefined,
+        element.getAttribute('placeholder') ?? undefined,
+        ...getNearbyText(element),
+      ];
+      return labels.some((label) =>
+        label?.trim().toLowerCase().includes(expected),
+      );
+    },
+  );
+}
+
+function evaluateExpectedAfterClick(
+  root: Document | ShadowRoot,
+  expected: ExpectedAfterClickFieldContains | undefined,
+) {
+  if (!expected) {
+    return undefined;
+  }
+
+  const field = findFieldByLabel(root, expected.field);
+  const actual = field ? (getElementValue(field) ?? '') : undefined;
+  return {
+    ...expected,
+    ok:
+      typeof actual === 'string' &&
+      actual.toLowerCase().includes(expected.value.toLowerCase()),
+    actual,
+    matchedField: field ? summarizeElement(field) : undefined,
+  };
+}
+
+function collectElements(root: Document | ShadowRoot | Element): Element[] {
+  const doc =
+    root instanceof Element ? root.ownerDocument : getOwnerDocument(root);
+  const start =
+    root instanceof Document ? (root.body ?? root.documentElement) : root;
+  if (!start) {
+    return [];
+  }
+
+  const collected: Element[] = [];
+
+  const visitRoot = (currentRoot: Document | ShadowRoot | Element) => {
+    const walker = doc.createTreeWalker(currentRoot, NodeFilter.SHOW_ELEMENT);
+    let node = walker.nextNode();
+
+    while (node) {
+      const element = node as Element;
+      if (isCandidateElement(element)) {
+        collected.push(element);
+      }
+
+      const shadowRoot = element.shadowRoot;
+      if (shadowRoot) {
+        visitRoot(shadowRoot);
+      }
+
+      if (element instanceof HTMLIFrameElement) {
+        try {
+          if (element.contentDocument) {
+            visitRoot(element.contentDocument);
+          }
+        } catch {
+          // Cross-origin frames are intentionally skipped.
+        }
+      }
+
+      if (collected.length >= MAX_SNAPSHOT_ELEMENTS) {
+        return;
+      }
+
+      node = walker.nextNode();
+    }
+  };
+
+  visitRoot(start);
+  return collected.slice(0, MAX_SNAPSHOT_ELEMENTS);
+}
+
+function setNativeValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+) {
+  const prototype = Object.getPrototypeOf(element) as
+    | HTMLInputElement
+    | HTMLTextAreaElement;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+  descriptor?.set?.call(element, value);
+}
+
+function dispatchInputEvents(element: Element) {
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function focusElement(element: Element) {
+  if (element instanceof HTMLElement || element instanceof SVGElement) {
+    element.scrollIntoView?.({ block: 'center', inline: 'center' });
+  }
+
+  if (element instanceof HTMLElement) {
+    element.focus?.();
+  }
+}
+
+function createPointerLikeEvent(
+  type: string,
+  init: MouseEventInit,
+): Event {
+  if (typeof PointerEvent === 'function') {
+    return new PointerEvent(type, init);
+  }
+
+  return new MouseEvent(type.replace('pointer', 'mouse'), init);
+}
+
+export class HostPageAutomationExecutor {
+  private refs = new Map<string, Element>();
+  private nextRef = 1;
+  private readableContent?: HostPageReadableContent;
+
+  constructor(private readonly options: HostPageAutomationOptions = {}) {}
+
+  async execute(
+    name: HostPageAutomationToolName,
+    params: Record<string, unknown> = {},
+  ): Promise<unknown> {
+    if (this.options.enabled === false) {
+      throw new Error('Host page automation is disabled.');
+    }
+
+    switch (name) {
+      case 'host_page_snapshot':
+        return this.snapshot();
+      case 'host_page_click':
+        return this.click(params);
+      case 'host_page_fill':
+        return this.fill(params);
+      case 'host_page_press':
+        return this.press(params);
+      case 'host_page_select':
+        return this.select(params);
+      case 'host_page_scroll':
+        return this.scroll(params);
+      case 'host_page_navigate':
+        return this.navigate(params);
+      case 'host_page_hover':
+        return this.hover(params);
+      case 'host_page_focus':
+        return this.focus(params);
+      case 'host_page_pointer':
+        return this.pointer(params);
+      case 'host_page_screenshot':
+        return this.screenshot();
+      case 'host_page_read':
+        return this.read(params);
+      case 'host_page_wait_for':
+        return this.waitFor(params);
+    }
+  }
+
+  snapshot(): HostPageSnapshot {
+    this.refs.clear();
+    this.nextRef = 1;
+
+    const root = this.getRoot();
+    const doc = getOwnerDocument(root);
+    const view = getWindow(root);
+    const elements = collectElements(root).map((element) =>
+      this.snapshotElement(element),
+    );
+    this.readableContent = extractHostPageReadableContent(root);
+
+    return {
+      url: view.location.href,
+      title: doc.title,
+      capabilities: {
+        cdp: false,
+        realInput: false,
+        screenshot: false,
+        accessibility: false,
+        networkState: false,
+      },
+      viewport: {
+        width: view.innerWidth,
+        height: view.innerHeight,
+        devicePixelRatio: view.devicePixelRatio,
+      },
+      scroll: {
+        x: view.scrollX,
+        y: view.scrollY,
+      },
+      page: {
+        readyState: doc.readyState,
+        visibilityState: doc.visibilityState,
+        focusedElement:
+          doc.activeElement && doc.activeElement !== doc.body
+            ? this.snapshotElementWithoutRef(doc.activeElement)
+            : undefined,
+        selection: doc.getSelection?.()?.toString() || undefined,
+      },
+      navigation: this.getNavigationState(view),
+      frames: this.getFrameState(doc),
+      accessibility: elements.map((element) => ({
+        ref: element.ref,
+        role: element.role,
+        name: element.name,
+        value: element.value,
+        disabled: element.disabled,
+        checked: element.checked,
+        focused: doc.activeElement === this.refs.get(element.ref),
+      })),
+      readableContent: createHostPageReadableContentIndex(
+        this.readableContent,
+      ),
+      elements,
+    };
+  }
+
+  private getRoot(): Document | ShadowRoot {
+    return this.options.root ?? document;
+  }
+
+  private invalidateReadableContent() {
+    this.readableContent = undefined;
+  }
+
+  private getNavigationState(view: Window): HostPageSnapshot['navigation'] {
+    const navigation = view.performance?.getEntriesByType?.('navigation')?.[0];
+    if (
+      typeof PerformanceNavigationTiming !== 'function' ||
+      !(navigation instanceof PerformanceNavigationTiming)
+    ) {
+      return undefined;
+    }
+
+    return {
+      type: navigation.type,
+      duration: navigation.duration,
+      domContentLoaded:
+        navigation.domContentLoadedEventEnd - navigation.startTime,
+      loadEventEnd: navigation.loadEventEnd - navigation.startTime,
+    };
+  }
+
+  private getFrameState(doc: Document): HostPageSnapshot['frames'] {
+    return Array.from(doc.querySelectorAll('iframe')).map((frame) => {
+      const rect = getGlobalRect(frame);
+      try {
+        return {
+          url: frame.contentWindow?.location.href,
+          title: frame.contentDocument?.title,
+          sameOrigin: true,
+          rect,
+        };
+      } catch {
+        return {
+          url: frame.getAttribute('src') ?? undefined,
+          sameOrigin: false,
+          rect,
+        };
+      }
+    });
+  }
+
+  private snapshotElement(element: Element): HostPageAutomationElementSnapshot {
+    const ref = `e${this.nextRef}`;
+    this.nextRef += 1;
+    this.refs.set(ref, element);
+
+    return this.createElementSnapshot(element, ref);
+  }
+
+  private snapshotElementWithoutRef(
+    element: Element,
+  ): HostPageAutomationElementSnapshot {
+    return this.createElementSnapshot(element, '');
+  }
+
+  private createElementSnapshot(
+    element: Element,
+    ref: string,
+  ): HostPageAutomationElementSnapshot {
+    const placeholder =
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+        ? element.placeholder || undefined
+        : undefined;
+    const actionability = getActionability(element);
+
+    return {
+      ref,
+      tag: element.tagName.toLowerCase(),
+      role: inferRole(element),
+      name: getElementName(element),
+      label: getControlLabel(element),
+      groupLabel: getChoiceGroupLabel(element),
+      text: getElementText(element),
+      nearbyText: getNearbyText(element),
+      testId: getElementTestId(element),
+      value: getElementValue(element),
+      selectedLabel: getSelectedLabel(element),
+      options: getSelectOptions(element),
+      placeholder,
+      selector: createSelector(element),
+      disabled: isDisabled(element),
+      enabled: actionability.enabled,
+      checked: isChecked(element),
+      visible: actionability.visible,
+      actionable: actionability.actionable,
+      receivesEvents: actionability.receivesEvents,
+      occludedBy: actionability.occludedBy
+        ? summarizeElement(actionability.occludedBy)
+        : undefined,
+      safeClickPoints: actionability.safeClickPoints,
+      rect: getGlobalRect(element),
+      center: actionability.center,
+      hitTarget: actionability.hitTarget
+        ? summarizeElement(actionability.hitTarget)
+        : undefined,
+      hitStack: actionability.hitStack.slice(0, 5).map(summarizeElement),
+    };
+  }
+
+  private resolveElement(params: ResolvableTargetParams): Element {
+    const ref = readOptionalString(params.ref) ?? readOptionalString(params.axRef);
+    if (ref) {
+      const element = this.refs.get(ref);
+      if (!element) {
+        throw new Error(`Unknown element ref: ${ref}. Take a new snapshot.`);
+      }
+      return element;
+    }
+
+    const selector = readOptionalString(params.selector);
+    if (selector) {
+      const element = this.getRoot().querySelector(selector);
+      if (!element) {
+        throw new Error(`No element matches selector: ${selector}.`);
+      }
+      return element;
+    }
+
+    const semanticElement = findBySemanticTarget(this.getRoot(), params);
+    if (semanticElement) {
+      return semanticElement;
+    }
+
+    if (typeof params.x !== 'undefined' || typeof params.y !== 'undefined') {
+      const point = readPoint(this.getRoot(), params);
+      const element = getOwnerDocument(this.getRoot()).elementFromPoint(
+        point.x,
+        point.y,
+      );
+      if (!element) {
+        throw new Error(`No element found at (${point.x}, ${point.y}).`);
+      }
+      return element;
+    }
+
+    throw new Error(
+      'Expected one of ref, selector, role/name/text/testId, or x/y.',
+    );
+  }
+
+  private async click(params: Record<string, unknown>) {
+    const input = normalizeParams(params);
+    const requestedElement = this.resolveElement(input);
+    const actionability = getActionability(requestedElement);
+    const fallback = actionability.actionable
+      ? null
+      : findSemanticVisibleFallback(this.getRoot(), requestedElement);
+    const target = fallback ?? findActionableAncestor(requestedElement);
+    const targetPoint = getReceivesEventsPoint(target);
+    if (
+      !targetPoint &&
+      !actionability.actionable &&
+      canHitTest(requestedElement.ownerDocument)
+    ) {
+      throw new HostPageAutomationStructuredError(
+        `Target "${getElementName(requestedElement) ?? requestedElement.tagName.toLowerCase()}" is not receiving pointer events.`,
+        {
+          reason: 'target_occluded',
+          target: this.describeElement(requestedElement),
+          occluder: actionability.occludedBy
+            ? summarizeElement(actionability.occludedBy)
+            : undefined,
+          targetVisible: actionability.visible,
+          targetEnabled: actionability.enabled,
+          targetReceivesEvents: actionability.receivesEvents,
+          recoverable: true,
+          hitStack: actionability.hitStack.slice(0, 5).map(summarizeElement),
+          nextActions: [
+            {
+              tool: 'host_page_press',
+              args: { key: 'Escape' },
+            },
+            {
+              tool: 'host_page_screenshot',
+              args: {},
+            },
+          ],
+        },
+      );
+    }
+
+    focusElement(target);
+
+    const latestTargetPoint = getReceivesEventsPoint(target);
+    const latestTargetActionability = getActionability(target);
+    const latestRequestedActionability = getActionability(requestedElement);
+    const clickPoint = latestTargetPoint
+      ? getGlobalPoint(target, latestTargetPoint)
+      : (latestTargetActionability.center ?? actionability.center);
+    if (clickPoint) {
+      await this.showVisualEffect({
+        type: 'click',
+        point: clickPoint,
+        anchor: 'target',
+        target,
+        requested: requestedElement,
+      });
+    }
+
+    if (target instanceof HTMLElement) {
+      target.click();
+    } else {
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+    this.invalidateReadableContent();
+
+    return {
+      clicked: this.describeElement(target),
+      requested: this.describeElement(requestedElement),
+      strategy:
+        target === requestedElement ? 'dom' : 'semantic_visible_fallback',
+      point: clickPoint,
+      actionability: {
+        visible: latestRequestedActionability.visible,
+        enabled: latestRequestedActionability.enabled,
+        receivesEvents: latestRequestedActionability.receivesEvents,
+        occludedBy: latestRequestedActionability.occludedBy
+          ? summarizeElement(latestRequestedActionability.occludedBy)
+          : undefined,
+        safeClickPoints: latestRequestedActionability.safeClickPoints,
+      },
+    };
+  }
+
+  private read(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as ReadParams;
+    const root = this.getRoot();
+    const readableContent =
+      this.readableContent ?? extractHostPageReadableContent(root);
+    this.readableContent = readableContent;
+    const readParams: HostPageReadParams = {
+      blockId: readOptionalString(input.blockId),
+      query: readOptionalString(input.query),
+      page: readOptionalInteger(input.page),
+      pageSize: readOptionalInteger(input.pageSize),
+      maxChars: readOptionalInteger(input.maxChars),
+    };
+    return readHostPageReadableContent(readableContent, readParams);
+  }
+
+  private async fill(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as FillParams;
+    const value = readString(input.value, 'value');
+    const element = this.resolveElement(input);
+
+    focusElement(element);
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
+      await this.showVisualEffect({
+        type: 'fill',
+        target: element,
+        requested: element,
+        value,
+        anchor: 'target',
+        point: getActionability(element).center,
+      });
+      setNativeValue(element, value);
+      dispatchInputEvents(element);
+      this.invalidateReadableContent();
+      return { filled: this.describeElement(element), value };
+    }
+
+    if (element instanceof HTMLElement && element.isContentEditable) {
+      await this.showVisualEffect({
+        type: 'fill',
+        target: element,
+        requested: element,
+        value,
+        anchor: 'target',
+        point: getActionability(element).center,
+      });
+      element.textContent = value;
+      dispatchInputEvents(element);
+      this.invalidateReadableContent();
+      return { filled: this.describeElement(element), value };
+    }
+
+    throw new Error('Target element cannot be filled.');
+  }
+
+  private async press(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as PressParams;
+    const key = readString(input.key, 'key');
+    const element =
+      input.ref ||
+      input.selector ||
+      (input.x !== undefined && input.y !== undefined)
+        ? this.resolveElement(input)
+        : (getOwnerDocument(this.getRoot()).activeElement ??
+          getOwnerDocument(this.getRoot()).body);
+
+    if (!element) {
+      throw new Error('No target element is available for key press.');
+    }
+
+    focusElement(element);
+    await this.showVisualEffect({
+      type: 'press',
+      target: element,
+      requested: element,
+      key,
+      anchor: 'target',
+      point: getActionability(element).center,
+    });
+    const eventInit = { key, bubbles: true, cancelable: true };
+    element.dispatchEvent(new KeyboardEvent('keydown', eventInit));
+    if (key.length === 1) {
+      element.dispatchEvent(new KeyboardEvent('keypress', eventInit));
+    }
+    element.dispatchEvent(new KeyboardEvent('keyup', eventInit));
+    this.invalidateReadableContent();
+    return { pressed: key, target: this.describeElement(element) };
+  }
+
+  private async select(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as SelectParams;
+    const values = readStringList(input.values ?? input.value);
+    const element = this.resolveElement(input);
+
+    if (!(element instanceof HTMLSelectElement)) {
+      throw new Error('Target element is not a select.');
+    }
+
+    focusElement(element);
+    const valueSet = new Set(values);
+    await this.showVisualEffect({
+      type: 'select',
+      target: element,
+      requested: element,
+      values,
+      anchor: 'target',
+      point: getActionability(element).center,
+    });
+    for (const option of Array.from(element.options)) {
+      option.selected = valueSet.has(option.value);
+    }
+
+    dispatchInputEvents(element);
+    this.invalidateReadableContent();
+    return {
+      selected: Array.from(element.selectedOptions).map(
+        (option) => option.value,
+      ),
+      target: this.describeElement(element),
+    };
+  }
+
+  private async scroll(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as ScrollParams;
+    const absolute: Point | null =
+      input.x !== undefined || input.y !== undefined
+        ? {
+            x: readOptionalNumber(input.x) ?? 0,
+            y: readOptionalNumber(input.y) ?? 0,
+          }
+        : null;
+    const deltaX = readOptionalNumber(input.deltaX) ?? 0;
+    const deltaY = readOptionalNumber(input.deltaY) ?? 0;
+    const root = this.getRoot();
+    const view = getWindow(root);
+
+    if (
+      input.ref ||
+      input.selector ||
+      input.role ||
+      input.name ||
+      input.text ||
+      input.testId
+    ) {
+      const element = this.resolveElement(input);
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('Target element cannot be scrolled.');
+      }
+      await this.showVisualEffect({
+        type: 'scroll',
+        target: element,
+        requested: element,
+        deltaX,
+        deltaY,
+        anchor: 'target',
+        point: getActionability(element).center,
+      });
+      if (absolute) {
+        element.scrollTo?.(absolute.x, absolute.y);
+      } else {
+        element.scrollBy?.(deltaX, deltaY);
+      }
+      this.invalidateReadableContent();
+      return {
+        scrolled: this.describeElement(element),
+        scroll: { x: element.scrollLeft, y: element.scrollTop },
+      };
+    }
+
+    await this.showVisualEffect({
+      type: 'scroll',
+      deltaX,
+      deltaY,
+      point: {
+        x: view.innerWidth / 2,
+        y: view.innerHeight / 2,
+      },
+    });
+    if (absolute) {
+      view.scrollTo?.(absolute.x, absolute.y);
+    } else {
+      view.scrollBy?.(deltaX, deltaY);
+    }
+    this.invalidateReadableContent();
+
+    return { scroll: { x: view.scrollX, y: view.scrollY } };
+  }
+
+  private navigate(params: Record<string, unknown>) {
+    if (this.options.allowNavigation === false) {
+      throw new Error('Navigation is disabled for host page automation.');
+    }
+
+    const input = normalizeParams(params) as NavigateParams;
+    const root = this.getRoot();
+    const view = getWindow(root);
+    const rawUrl = readString(input.url, 'url');
+    const nextUrl = new URL(rawUrl, view.location.href);
+    if (nextUrl.protocol !== 'http:' && nextUrl.protocol !== 'https:') {
+      throw new Error('Navigation only supports HTTP(S) URLs.');
+    }
+
+    this.refs.clear();
+    this.invalidateReadableContent();
+    view.location.assign(nextUrl.toString());
+    return { navigated: nextUrl.toString() };
+  }
+
+  private async hover(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as HoverParams;
+    const element = this.resolveElement(input);
+    const point = getActionability(element).center;
+
+    await this.showVisualEffect({
+      type: 'hover',
+      target: element,
+      requested: element,
+      anchor: 'target',
+      point,
+    });
+    element.dispatchEvent(
+      new MouseEvent('mouseover', {
+        bubbles: true,
+        cancelable: true,
+        clientX: point?.x,
+        clientY: point?.y,
+      }),
+    );
+    element.dispatchEvent(
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        clientX: point?.x,
+        clientY: point?.y,
+      }),
+    );
+
+    return { hovered: this.describeElement(element), point };
+  }
+
+  private async focus(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as FocusParams;
+    const element = this.resolveElement(input);
+    focusElement(element);
+    await this.showVisualEffect({
+      type: 'focus',
+      target: element,
+      requested: element,
+      anchor: 'target',
+      point: getActionability(element).center,
+    });
+    return { focused: this.describeElement(element) };
+  }
+
+  private async pointer(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as PointerParams;
+    const action =
+      readOptionalEnum(input.action, ['move', 'down', 'up', 'click'] as const) ??
+      'click';
+    const button = readOptionalInteger(input.button) ?? 0;
+    const hasExplicitPoint =
+      typeof input.x !== 'undefined' || typeof input.y !== 'undefined';
+    const targetText = readOptionalString(input.targetText);
+    if (action === 'click' && hasExplicitPoint && !targetText) {
+      throw new Error(
+        'Pointer coordinate clicks require targetText to avoid unintended navigation.',
+      );
+    }
+    const element =
+      input.ref ||
+      input.selector ||
+      input.role ||
+      input.name ||
+      input.text ||
+      input.testId
+        ? this.resolveElement(input)
+        : null;
+    const point = element
+      ? getActionability(element).center
+      : readPoint(this.getRoot(), input);
+    if (!point) {
+      throw new Error('Target element has no clickable point.');
+    }
+    const target =
+      element ??
+      getOwnerDocument(this.getRoot()).elementFromPoint(point.x, point.y);
+
+    if (!target) {
+      throw new Error(`No element found at (${point.x}, ${point.y}).`);
+    }
+
+    const targetTextMatched = targetText
+      ? elementOrAncestorMatchesText(target, targetText)
+      : undefined;
+    if (targetText && !targetTextMatched) {
+      throw new Error(
+        `Pointer target text mismatch: expected hit target to contain "${targetText}".`,
+      );
+    }
+
+    const eventInit = {
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+      button,
+    };
+
+    if (action === 'move') {
+      await this.showVisualEffect({
+        type: 'pointer',
+        action,
+        anchor: 'point',
+        point,
+        target,
+      });
+      target.dispatchEvent(createPointerLikeEvent('pointermove', eventInit));
+      target.dispatchEvent(new MouseEvent('mousemove', eventInit));
+    } else if (action === 'down') {
+      await this.showVisualEffect({
+        type: 'pointer',
+        action,
+        anchor: 'point',
+        point,
+        target,
+      });
+      target.dispatchEvent(createPointerLikeEvent('pointerdown', eventInit));
+      target.dispatchEvent(new MouseEvent('mousedown', eventInit));
+    } else if (action === 'up') {
+      await this.showVisualEffect({
+        type: 'pointer',
+        action,
+        anchor: 'point',
+        point,
+        target,
+      });
+      target.dispatchEvent(createPointerLikeEvent('pointerup', eventInit));
+      target.dispatchEvent(new MouseEvent('mouseup', eventInit));
+    } else {
+      await this.showVisualEffect({
+        type: 'click',
+        anchor: 'point',
+        point,
+        target,
+      });
+      target.dispatchEvent(createPointerLikeEvent('pointerdown', eventInit));
+      target.dispatchEvent(new MouseEvent('mousedown', eventInit));
+      target.dispatchEvent(createPointerLikeEvent('pointerup', eventInit));
+      target.dispatchEvent(new MouseEvent('mouseup', eventInit));
+      if (target instanceof HTMLElement) {
+        target.click();
+      } else {
+        target.dispatchEvent(new MouseEvent('click', eventInit));
+      }
+      this.invalidateReadableContent();
+    }
+
+    return {
+      pointer: action,
+      point,
+      coordinateSpace: 'viewport-css-px',
+      target: this.describeElement(target),
+      targetTextMatched,
+      expectedAfterClick:
+        action === 'click'
+          ? evaluateExpectedAfterClick(
+              this.getRoot(),
+              readExpectedAfterClick(input.expectedAfterClick),
+            )
+          : undefined,
+    };
+  }
+
+  private screenshot() {
+    throw new Error(
+      'host_page_screenshot requires the browser extension CDP adapter.',
+    );
+  }
+
+  private async showVisualEffect(
+    context: HostPageAutomationVisualEffectContext,
+  ) {
+    try {
+      await this.options.showVisualEffect?.(context);
+    } catch {
+      // Visual feedback is best-effort and should never block automation.
+    }
+
+    if (
+      context.type !== 'click' ||
+      !context.point ||
+      !context.target ||
+      this.options.showVisualEffect
+    ) {
+      return;
+    }
+
+    try {
+      await this.options.showClickEffect?.({
+        point: context.point,
+        target: context.target,
+        requested: context.requested,
+      });
+    } catch {
+      // Visual feedback is best-effort and should never block automation.
+    }
+  }
+
+  private async waitFor(params: Record<string, unknown>) {
+    const input = normalizeParams(params) as WaitForParams;
+    const state =
+      readOptionalEnum(input.state, [
+        'attached',
+        'visible',
+        'hidden',
+        'detached',
+      ] as const) ?? 'visible';
+    const timeoutSeconds = readOptionalNumber(input.timeoutSeconds);
+    const timeoutMs = Math.min(
+      WAIT_FOR_MAX_TIMEOUT_MS,
+      Math.max(0, (timeoutSeconds ?? WAIT_FOR_DEFAULT_TIMEOUT_MS / 1_000) * 1_000),
+    );
+    const startedAt = Date.now();
+    const initialElement = this.tryResolveElement(input);
+
+    await this.showVisualEffect({
+      type: 'wait_for',
+      state,
+      target: initialElement ?? undefined,
+      requested: initialElement ?? undefined,
+      ...(initialElement ? { anchor: 'target' as const } : {}),
+      point: initialElement
+        ? getActionability(initialElement).center
+        : undefined,
+    });
+
+    while (Date.now() - startedAt <= timeoutMs) {
+      const element = this.tryResolveElement(input);
+      const matched =
+        state === 'attached'
+          ? Boolean(element)
+          : state === 'detached'
+            ? !element
+            : state === 'hidden'
+              ? !element || !isVisibleCandidate(element)
+              : Boolean(element && isVisibleCandidate(element));
+
+      if (matched) {
+        return {
+          waitedFor: state,
+          elapsedMs: Date.now() - startedAt,
+          target: element ? this.describeElement(element) : undefined,
+        };
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    throw new Error(`Timed out waiting for target to become ${state}.`);
+  }
+
+  private tryResolveElement(params: ResolvableTargetParams): Element | null {
+    try {
+      return this.resolveElement(params);
+    } catch {
+      return null;
+    }
+  }
+
+  private describeElement(element: Element) {
+    return {
+      tag: element.tagName.toLowerCase(),
+      role: inferRole(element),
+      name: getElementName(element),
+      selector: createSelector(element),
+    };
+  }
+}

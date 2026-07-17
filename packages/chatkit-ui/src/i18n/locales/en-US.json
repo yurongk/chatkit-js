@@ -5,12 +5,52 @@
     "statusOnline": "Online",
     "missingConfigShort": "Missing ChatKit configuration.",
     "missingConfigDetail": "Missing ChatKit configuration. Check `VITE_XPERTAI_API_URL`, and the `clientSecret` prop.",
+    "missingApiUrlShort": "Missing ChatKit API URL.",
+    "missingApiUrlDetail": "Missing ChatKit API URL. Check `VITE_XPERTAI_API_URL` or `options.api.apiUrl`.",
+    "missingClientSecretShort": "Missing ChatKit client secret.",
+    "missingClientSecretDetail": "Missing ChatKit client secret. Check the `clientSecret` prop or `api.getClientSecret` integration.",
+    "missingApiUrlAndClientSecretShort": "Missing ChatKit API URL and client secret.",
+    "missingApiUrlAndClientSecretDetail": "Missing ChatKit API URL and client secret. Check `VITE_XPERTAI_API_URL`, `options.api.apiUrl`, and your client secret integration.",
     "loadingThread": "Loading thread...",
     "stop": "Stop",
     "send": "Send message",
+    "minimizeToPet": "Minimize to pet",
+    "referencedContentOnly": "Referenced content",
+    "youLabel": "You",
     "scrollToBottom": "Scroll to bottom",
+    "loadMoreMessages": "Load more",
+    "loadingMoreMessages": "Loading...",
     "retryUpload": "Retry upload",
+    "dropFilesTitle": "Drop files to upload",
+    "dropFilesHint": "They will be attached to your next message.",
+    "attachmentStatus": {
+      "uploaded": "Uploaded",
+      "scanning": "Scanning",
+      "parsing": "Parsing",
+      "ready": "Ready",
+      "partial": "Partially ready",
+      "failed": "Failed"
+    },
     "poweredBy": "Powered by Xpert AI",
+    "followUps": {
+      "pending": "Pending follow-ups",
+      "queue": "Queue",
+      "steerAction": "Steer",
+      "sendNow": "Send now",
+      "remove": "Remove pending follow-up",
+      "more": "More actions",
+      "edit": "Edit message",
+      "queueHint": "Starts after the current run finishes",
+      "manualQueueHint": "Ready to send as a new run",
+      "steerHint": "Injects after the current tool call"
+    },
+    "todos": {
+      "summary": "{{total}} tasks, {{completed}} completed"
+    },
+    "runtimeServices": {
+      "summary": "{{count}} services running",
+      "stop": "Stop service"
+    },
     "errors": {
       "loadMessages": "Failed to load thread messages",
       "createThread": "Failed to create thread",
@@ -20,6 +60,27 @@
       "label": "Context window",
       "full": "{{usedPercent}}% used ({{remainingPercent}}% left)",
       "tokensUsed": "{{used}} / {{max}} tokens used"
+    },
+    "goal": {
+      "label": "Goal",
+      "unavailable": "Goal controls are not available for this client.",
+      "startThreadRequired": "Start a conversation before changing the goal.",
+      "elapsed": "{{elapsed}} elapsed",
+      "edit": "Edit goal",
+      "pause": "Pause goal",
+      "resume": "Resume goal",
+      "clear": "Clear goal",
+      "hide": "Hide goal",
+      "expandObjective": "Show full goal",
+      "collapseObjective": "Hide full goal",
+      "status": {
+        "active": "active",
+        "paused": "paused",
+        "blocked": "blocked",
+        "usage_limited": "usage limited",
+        "budget_limited": "budget limited",
+        "complete": "complete"
+      }
     }
   },
   "history": {
@@ -37,17 +98,192 @@
     "regenerate": "Regenerate response"
   },
   "startScreen": {
-    "greeting": "What can I help with today?"
+    "greeting": "What can I help with today?",
+    "editPrompt": "Edit prompt"
   },
   "composer": {
     "openMenu": "Open menu",
-    "addAttachment": "Add attachment"
+    "addAttachment": "Add attachment",
+    "planMode": "Plan mode",
+    "capabilities": {
+      "title": "Skills & Plugins",
+      "skills": "Skills",
+      "plugins": "Plugins",
+      "subAgents": "Sub-agents",
+      "runOnly": "This run",
+      "removeRunCapability": "Remove capability",
+      "emptySearch": "No matching skills, plugins, or sub-agents",
+      "agent": "Agent",
+      "xpertAgent": "Xpert",
+      "agentDetails": "Agent details",
+      "type": "Type",
+      "identifier": "ID",
+      "inputs": "Inputs",
+      "tools": "Tools",
+      "toolsets": "Toolsets",
+      "knowledge": "Knowledge"
+    },
+    "slashCommands": {
+      "commands": {
+        "plan": {
+          "label": "Plan",
+          "description": "Toggle plan mode",
+          "argsHint": "[prompt]"
+        },
+        "skills": {
+          "label": "Skills",
+          "description": "Show runtime skills"
+        },
+        "plugins": {
+          "label": "Plugins",
+          "description": "Show runtime plugins"
+        },
+        "subagents": {
+          "label": "Sub-agents",
+          "description": "Show runtime sub-agents"
+        },
+        "pet": {
+          "label": "Pet",
+          "description": "Toggle pet companion",
+          "argsHint": "[on|off|settings]"
+        }
+      },
+      "empty": {
+        "loadingCapabilities": "Loading runtime capabilities...",
+        "skills": "No skills to add",
+        "plugins": "No plugins to add",
+        "subAgents": "No sub-agents to add",
+        "matchingSkills": "No matching skills to add",
+        "matchingPlugins": "No matching plugins to add",
+        "matchingSubAgents": "No matching sub-agents to add"
+      }
+    },
+    "planModeActive": "Plan",
+    "disablePlanMode": "Turn off plan mode",
+    "removeReference": "Remove reference",
+    "quoteSelection": "Quote selection",
+    "requestUserInput": {
+      "title": "Input requested",
+      "recommended": "Recommended",
+      "other": "Other",
+      "otherPlaceholder": "Type a custom answer",
+      "continue": "Continue",
+      "dismiss": "Dismiss",
+      "previousQuestion": "Previous question",
+      "nextQuestion": "Next question",
+      "questionProgress": "{{current}} of {{total}}",
+      "optionInfo": "Details for {{label}}",
+      "submit": "Continue"
+    },
+    "hitl": {
+      "title": "Action review",
+      "actionProgress": "{{current}} of {{total}}",
+      "previousAction": "Previous action",
+      "nextAction": "Next action",
+      "arguments": "Arguments",
+      "approve": "Approve",
+      "edit": "Edit",
+      "reject": "Reject",
+      "respond": "Respond",
+      "rejectMessage": "Feedback for the agent",
+      "respondMessage": "Response to the agent",
+      "rejectPlaceholder": "Explain why this action should not run",
+      "respondPlaceholder": "Tell the agent what to do instead",
+      "invalidJson": "Arguments must be a valid JSON object",
+      "responseRequired": "A response message is required",
+      "dismiss": "Dismiss",
+      "submit": "Confirm"
+    }
+  },
+  "settings": {
+    "open": "Settings",
+    "title": "Settings"
+  },
+  "pet": {
+    "settings": {
+      "title": "Pet",
+      "description": "Stored in this browser.",
+      "enabled": "Enable pet",
+      "requiredHint": "Required in pet launcher mode.",
+      "characterType": "Character",
+      "characterTypes": {
+        "builtin": "Built-in",
+        "atlas": "Spritesheet URL"
+      },
+      "builtin": "Built-in pet",
+      "builtins": {
+        "batmeme": "Batmeme",
+        "boba": "Boba",
+        "bolt": "Bolt",
+        "einstein": "Einstein",
+        "lando-2": "Lando",
+        "mini-sama": "Mini Sama",
+        "miso": "Miso",
+        "noir-webling": "Noir Webling",
+        "nukey": "Nukey",
+        "steve": "Steve"
+      },
+      "atlasUrl": "Spritesheet URL",
+      "scale": "Scale",
+      "draggable": "Draggable",
+      "persistPosition": "Remember position",
+      "cancel": "Cancel",
+      "save": "Save"
+    }
   },
   "sheet": {
     "close": "Close"
   },
   "markdown": {
-    "copy": "Copy"
+    "copy": "Copy",
+    "plan": {
+      "title": "Plan",
+      "expand": "Expand plan",
+      "collapse": "Collapse plan",
+      "download": "Download Markdown"
+    },
+    "mermaid": {
+      "title": "Mermaid",
+      "diagram": "Diagram",
+      "code": "Code",
+      "download": "Download SVG",
+      "fullScreen": "Open full screen",
+      "rendering": "Rendering diagram",
+      "failed": "Failed to render diagram"
+    }
+  },
+  "taskSummary": {
+    "title": "Task summary",
+    "description": "Current task, outputs, sources, running services, agent activity, and pending requests.",
+    "open": "Open task summary",
+    "empty": "Task activity will appear here.",
+    "historyError": "Some historical summary data failed to load. Live activity is still available.",
+    "retry": "Retry",
+    "viewAll": "View all",
+    "loadMore": "Load more",
+    "collapse": "Show less",
+    "createOutput": "Create files or sites",
+    "addOutput": "Create output",
+    "addSource": "Add source",
+    "sections": {
+      "task": "Task",
+      "outputs": "Outputs",
+      "sources": "Sources",
+      "running": "Running",
+      "agents": "Agent activity",
+      "pending": "Pending"
+    },
+    "status": {
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "completed": "Completed"
+    },
+    "pending": {
+      "approval": "Approval required",
+      "userInput": "Input required",
+      "followUp": "Pending follow-up message",
+      "steer": "Pending steering message"
+    }
   },
   "thread": {
     "errorToast": "An error occurred. Please try again.",
@@ -56,6 +292,148 @@
   },
   "message": {
     "answer": "Answer",
-    "reasoning": "Reasoning"
+    "reasoning": "Reasoning",
+    "loading": "Loading",
+    "thinking": "Thinking",
+    "answering": "Answering",
+    "navigation": {
+      "label": "Message navigation",
+      "system": "System",
+      "tool": "Tool",
+      "event": "Event",
+      "message": "Message",
+      "image": "Image",
+      "memory": "Memory",
+      "widget": "Widget",
+      "mcpApp": "MCP App",
+      "attachment": "Attachment",
+      "reference": "Reference",
+      "capability": "Capability",
+      "moreTags": "+{{count}}"
+    },
+    "mcpApp": {
+      "loading": "Loading MCP App"
+    },
+    "contextCompression": {
+      "running": "Automatically compressing context",
+      "success": "Context automatically compressed",
+      "skipped": "Context not compressed",
+      "fail": "Context compression failed"
+    },
+    "requestUserInputResult": {
+      "title": "Selections confirmed",
+      "option": "Option",
+      "other": "Other"
+    },
+    "knowledgeRetriever": {
+      "queryTitle": "Query",
+      "resultsTitle": "Retrieved results ({{count}})",
+      "rawDataTitle": "Raw data",
+      "noResults": "No knowledge results found",
+      "scoreLabel": "Score"
+    },
+    "agentRun": {
+      "defaultTitle": "Sub-agent",
+      "inputLabel": "Input",
+      "errorLabel": "Error",
+      "status": {
+        "running": "Running",
+        "success": "Done",
+        "error": "Error",
+        "replied": "Replied",
+        "pending": "Pending",
+        "interrupted": "Interrupted",
+        "timeout": "Timed out"
+      },
+      "counts": {
+        "messages": {
+          "one": "{{count}} message",
+          "other": "{{count}} messages"
+        },
+        "tools": {
+          "one": "{{count}} tool",
+          "other": "{{count}} tools"
+        },
+        "events": {
+          "one": "{{count}} event",
+          "other": "{{count}} events"
+        },
+        "children": {
+          "one": "{{count}} child agent",
+          "other": "{{count}} child agents"
+        }
+      }
+    },
+    "middlewareEvent": {
+      "title": {
+        "default": "Middleware",
+        "ModelFallbackMiddleware": "Model fallback",
+        "ModelRetryMiddleware": "Model retry"
+      },
+      "phase": {
+        "fallback_started": "Trying fallback model {{attempt}}/{{total}}",
+        "fallback_succeeded": "Fallback model succeeded {{attempt}}/{{total}}",
+        "fallback_failed": "Fallback model failed {{attempt}}/{{total}}",
+        "retry_scheduled": "Scheduling model retry {{attempt}}/{{total}}",
+        "retry_started": "Retrying model call {{attempt}}/{{total}}",
+        "retry_succeeded": "Model retry succeeded {{attempt}}/{{total}}",
+        "retry_failed": "Model retry failed {{attempt}}/{{total}}"
+      }
+    },
+    "toolGroup": {
+      "status": {
+        "running": "Processing",
+        "success": "Processed",
+        "fail": "Processing failed"
+      },
+      "inputTitle": "Input",
+      "outputTitle": "Output",
+      "errorTitle": "Error",
+      "jsonTitle": "JSON",
+      "jsonTree": "Tree",
+      "jsonRaw": "Raw",
+      "sourcesTitle": "Sources",
+      "copy": "Copy",
+      "copied": "Copied",
+      "separator": ", ",
+      "shell": {
+        "success": "Success",
+        "running": "Running",
+        "failed": "Failed",
+        "exitCode": "Exit code {{code}}",
+        "ranCommand": "Ran {{command}}",
+        "runningCommand": "Running {{command}}"
+      },
+      "categories": {
+        "files": {
+          "one": "{{count}} file",
+          "other": "{{count}} files"
+        },
+        "searches": {
+          "one": "{{count}} search",
+          "other": "{{count}} searches"
+        },
+        "commands": {
+          "one": "{{count}} command",
+          "other": "{{count}} commands"
+        },
+        "lists": {
+          "one": "{{count}} list",
+          "other": "{{count}} lists"
+        },
+        "tasks": {
+          "one": "{{count}} task",
+          "other": "{{count}} tasks"
+        },
+        "knowledges": {
+          "one": "{{count}} knowledge result",
+          "other": "{{count}} knowledge results"
+        },
+        "tools": {
+          "one": "{{count}} tool",
+          "other": "{{count}} tools"
+        }
+      }
+    }
   }
 }

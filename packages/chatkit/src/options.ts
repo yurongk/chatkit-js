@@ -1,5 +1,10 @@
-
 import type { ClientToolMessageInput } from './interrupt';
+import type { ChatKitSlashCommand } from './commands';
+import type {
+  RuntimeCapabilitiesSelection,
+  ThreadGoal,
+  ThreadGoalStatus,
+} from './message';
 import type * as Widgets from './widgets';
 
 export * from './widgets';
@@ -202,6 +207,79 @@ export type ModelOption = {
   default?: boolean;
 };
 
+export type FollowUpBehavior = 'queue' | 'steer';
+
+export type ChatKitPetAnimationName =
+  | 'idle'
+  | 'running-right'
+  | 'running-left'
+  | 'waving'
+  | 'jumping'
+  | 'failed'
+  | 'waiting'
+  | 'running'
+  | 'review';
+
+export type ChatKitPetAnimationMode = 'loop' | 'once';
+
+export type ChatKitPetPin =
+  | 'top-left'
+  | 'top'
+  | 'top-right'
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'bottom-left'
+  | 'bottom'
+  | 'bottom-right';
+
+export type ChatKitPetFrameAnimation = {
+  row?: number;
+  frames?: number;
+  frameDurations?: readonly number[];
+};
+
+export type ChatKitPetSpriteAtlas = {
+  columns?: number;
+  rows?: number;
+  cellWidth?: number;
+  cellHeight?: number;
+  animations?: Partial<
+    Record<ChatKitPetAnimationName, ChatKitPetFrameAnimation>
+  >;
+};
+
+export type ChatKitPetCharacter = {
+  type: 'sprite-atlas';
+  src: string;
+  atlas?: ChatKitPetSpriteAtlas;
+};
+
+export type ChatKitPetBoundsPadding = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
+
+export type ChatKitPetPositionOptions = {
+  pin?: ChatKitPetPin | null;
+  draggable?: boolean;
+  scale?: number;
+  persist?: boolean;
+  boundsPadding?: number | Partial<ChatKitPetBoundsPadding>;
+  zIndex?: number;
+};
+
+export type ChatKitPetOptions = {
+  enabled?: boolean;
+  character?: ChatKitPetCharacter;
+  position?: ChatKitPetPositionOptions;
+  behavior?: 'auto' | 'manual';
+  ariaLabel?: string;
+  imageRendering?: 'auto' | 'pixelated' | 'crisp-edges';
+};
+
 export type ChatKitTheme = {
   /**
    * The color scheme to use for the ChatKit UI.
@@ -242,6 +320,28 @@ export type ChatKitTheme = {
     accent?: AccentColor;
     surface?: SurfaceColors;
   };
+};
+
+export type ChatKitLayoutOptions = {
+  /**
+   * Maximum width of the internal chat column on wide screens. The ChatKit root
+   * still fills its host container; message content and composer remain centered
+   * within this width.
+   *
+   * Accepts any CSS max-width value, or a number interpreted by React as pixels.
+   *
+   * @example "960px"
+   */
+  maxWidth?: number | string;
+};
+
+export type ChatKitMessageNavigationOptions = {
+  /**
+   * Whether to show the message quick navigation rail.
+   *
+   * @default true
+   */
+  enabled?: boolean;
 };
 
 type CustomApiConfig = {
@@ -302,11 +402,11 @@ type HostedApiConfig = {
 export type ChatKitClientSecretObject = {
   secret: string;
   organizationId?: string;
+  xpertId?: string;
+  assistantId?: string;
 };
 
-export type ChatKitClientSecretResult =
-  | string
-  | ChatKitClientSecretObject;
+export type ChatKitClientSecretResult = string | ChatKitClientSecretObject;
 
 export type ChatKitRequestContext = {
   /**
@@ -346,11 +446,54 @@ export type ChatKitRequestOptions<
   config?: TConfig;
 };
 
+export type ChatKitGoalCommandStatus = Extract<
+  ThreadGoalStatus,
+  'active' | 'paused'
+>;
+
+export type ChatKitGoalSetResult = {
+  threadId: string;
+  goal: ThreadGoal;
+};
+
+export type ChatKitGoalAdapter = {
+  getGoal: (params: {
+    threadId: string;
+    signal?: AbortSignal;
+  }) => Promise<ThreadGoal | null>;
+  setGoal: (params: {
+    threadId?: string | null;
+    assistantId: string;
+    objective: string;
+    runtimeCapabilities?: RuntimeCapabilitiesSelection | null;
+    signal?: AbortSignal;
+  }) => Promise<ChatKitGoalSetResult>;
+  updateGoal: (params: {
+    threadId: string;
+    objective?: string;
+    status?: ChatKitGoalCommandStatus;
+    signal?: AbortSignal;
+  }) => Promise<ThreadGoal>;
+  clearGoal: (params: {
+    threadId: string;
+    signal?: AbortSignal;
+  }) => Promise<ThreadGoal | null>;
+};
+
 export type ChatKitOptions = {
   /**
    * ChatKit iframe URL for web component integrations.
    */
   frameUrl?: string;
+
+  /**
+   * Controls how the ChatKit web component is presented.
+   * - `chat`: render the ChatKit iframe in the host layout.
+   * - `pet`: render only the pet launcher until the user clicks the pet.
+   *
+   * @default "chat"
+   */
+  displayMode?: 'chat' | 'pet';
 
   api: CustomApiConfig | HostedApiConfig;
 
@@ -359,6 +502,21 @@ export type ChatKitOptions = {
    * from this ChatKit instance.
    */
   request?: ChatKitRequestOptions;
+
+  /**
+   * Optional persistent goal adapter used by runtime `/goal` commands.
+   * When omitted, ChatKit may use a platform-specific default adapter if the
+   * active client exposes one.
+   */
+  goal?: ChatKitGoalAdapter;
+
+  /**
+   * Optional compact thread summary surface. Disabled by default so existing
+   * integrations keep their current layout until they opt in.
+   */
+  taskSummary?: {
+    enabled?: boolean;
+  };
 
   /**
    * Locale override for ChatKit UI. If not provided, the browser's locale
@@ -373,6 +531,25 @@ export type ChatKitOptions = {
    * * @default "light"
    */
   theme?: ColorScheme | ChatKitTheme;
+
+  /**
+   * Layout configuration for the ChatKit UI.
+   */
+  layout?: ChatKitLayoutOptions;
+
+  /**
+   * Message list quick navigation controls.
+   */
+  messageNavigation?: ChatKitMessageNavigationOptions;
+
+  /**
+   * Optional animated pet companion rendered by the ChatKit web component over
+   * the host page viewport.
+   * Passing `true` enables the default built-in pet.
+   *
+   * @default false
+   */
+  pet?: boolean | ChatKitPetOptions;
 
   /**
    * The ID of the thread to show when ChatKit is mounted or opened for the first time.
@@ -532,6 +709,12 @@ export type ChatKitOptions = {
 
     /** A list of models that users can choose from before sending a message. */
     models?: ModelOption[];
+
+    /**
+     * Slash commands shown when users type `/` at the start of the composer.
+     * Command names should not include the leading slash.
+     */
+    slashCommands?: ChatKitSlashCommand[];
   };
 
   /**

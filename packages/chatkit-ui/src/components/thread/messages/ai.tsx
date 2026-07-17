@@ -1,64 +1,101 @@
 import * as React from 'react';
 
 import type {
+  ChatKitOptions,
+  ChatKitPetAnimationName,
   ChatkitMessage,
   MessageContentImageUrl,
   TMessageContentComplex,
   TMessageContentComponent,
+  TMessageComponentMcpAppData,
   TMessageComponentWidgetData,
   TMessageContentMemory,
   TMessageContentReasoning,
   TMessageContentText,
-  TMessageComponentStep,
 } from '@xpert-ai/chatkit-types';
-import { ChevronDown, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { ChevronDown, Clock3, Loader2 } from 'lucide-react';
 
 import { useChatkitTranslation } from '../../../i18n/useChatkitTranslation';
+import {
+  type AssistantStreamingStatus,
+  getAssistantStreamingStatus,
+  hasRenderableMessageContent,
+  hasRenderableReasoning,
+} from '../../../lib/message';
+import { isAgentEventContent } from '../../../lib/agent-runs';
+import { isThreadContextUsageRenderArtifact } from '../../../lib/thread-context-usage';
+import {
+  buildAssistantRenderTree,
+  type AssistantContentEntry,
+  type AssistantMessageWithAgentRuns,
+  type AssistantRenderUnit,
+} from '../../../lib/agent-run-render-tree';
 import { isNearBottom } from '../../../lib/scroll';
 import { cn } from '../../../lib/utils';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
+import { InlinePetStatus } from '../../pet/InlinePetStatus';
 import { MarkdownText } from '../markdown-text';
+import { AgentEventRow, AgentRunGroup } from './agent-run-group';
+import {
+  ContextCompressionMessage,
+  isContextCompressionComponent,
+} from './context-compression-message';
+import { getComponentMessagePresentation } from './component-message-renderers';
+import {
+  buildToolComponentRenderUnits,
+  getToolActivityLabel,
+  getToolStepData,
+  ToolComponentGroup,
+  toolStatusConfig,
+  type ToolComponentRenderUnit,
+} from './tool-component-group';
+import {
+  getRequestUserInputResultCardData,
+  RequestUserInputResultCard,
+} from './request-user-input-result-card';
 import { WidgetMessage } from './widget';
+import { isMcpAppComponentData, McpAppMessage } from './mcp-app';
 
 export type AssistantMessageProps = {
   message: ChatkitMessage & { type: 'assistant' };
+  messages?: ChatkitMessage[];
   className?: string;
   isStreaming?: boolean;
+  streamingStatus?: AssistantStreamingStatus | null;
+  isThreadRunning?: boolean;
+  organizationId?: string;
+  apiUrl?: string;
+  pet?: ChatKitOptions['pet'] | null;
 };
 
-function isTextContent(content: TMessageContentComplex): content is TMessageContentText {
+const assistantMessageStackClassName =
+  'space-y-3 in-data-[density=compact]:space-y-2 in-data-[density=spacious]:space-y-4';
+
+function isTextContent(
+  content: TMessageContentComplex,
+): content is TMessageContentText {
   return content.type === 'text';
 }
 
-function isReasoningContent(content: TMessageContentComplex): content is TMessageContentReasoning {
+function isReasoningContent(
+  content: TMessageContentComplex,
+): content is TMessageContentReasoning {
   return content.type === 'reasoning';
 }
 
-function isImageContent(content: TMessageContentComplex): content is MessageContentImageUrl {
+function isImageContent(
+  content: TMessageContentComplex,
+): content is MessageContentImageUrl {
   return content.type === 'image_url';
 }
 
-function isComponentContent(content: TMessageContentComplex): content is TMessageContentComponent {
+function isComponentContent(
+  content: TMessageContentComplex,
+): content is TMessageContentComponent {
   return content.type === 'component';
 }
-
-// Status styling configuration
-const statusConfig = {
-  success: {
-    iconClass: 'border-green-500 text-green-700',
-    icon: CheckCircle2,
-  },
-  fail: {
-    iconClass: 'border-red-500 text-red-700',
-    icon: XCircle,
-  },
-  running: {
-    iconClass: 'border-blue-500 text-blue-700',
-    icon: Loader2,
-  },
-};
 
 function isWidgetComponent(
   content: TMessageContentComponent,
@@ -67,7 +104,15 @@ function isWidgetComponent(
   return data?.type === 'Widget' && Array.isArray(data.widgets);
 }
 
-function isMemoryContent(content: TMessageContentComplex): content is TMessageContentMemory {
+function isMcpAppComponent(
+  content: TMessageContentComponent,
+): content is TMessageContentComponent<TMessageComponentMcpAppData> {
+  return isMcpAppComponentData(content.data);
+}
+
+function isMemoryContent(
+  content: TMessageContentComplex,
+): content is TMessageContentMemory {
   return content.type === 'memory';
 }
 
@@ -79,7 +124,21 @@ function safeJson(value: unknown) {
   }
 }
 
-function ReasoningBlock({ reasoning }: { reasoning: TMessageContentReasoning[] }) {
+function formatDisplayValue(value: unknown) {
+  return typeof value === 'string' ? value : safeJson(value);
+}
+
+function getInlinePetState(
+  status: AssistantStreamingStatus,
+): ChatKitPetAnimationName {
+  return status === 'loading' ? 'running' : 'review';
+}
+
+function ReasoningBlock({
+  reasoning,
+}: {
+  reasoning: TMessageContentReasoning[];
+}) {
   const blocks = reasoning.filter((item) => item.text?.trim());
   if (blocks.length === 0) return null;
 
@@ -90,7 +149,9 @@ function ReasoningBlock({ reasoning }: { reasoning: TMessageContentReasoning[] }
           key={item.id ?? `reasoning-${index}`}
           className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground"
         >
-          <p className="whitespace-pre-wrap wrap-break-word leading-relaxed">{item.text}</p>
+          <p className="whitespace-pre-wrap wrap-break-word leading-relaxed">
+            {item.text}
+          </p>
         </div>
       ))}
     </div>
@@ -120,7 +181,11 @@ function ImageBlock({ content }: { content: MessageContentImageUrl }) {
 
   return (
     <figure className="overflow-hidden rounded-lg border bg-background">
-      <img src={imageUrl} alt="Assistant output" className="h-auto w-full object-cover" />
+      <img
+        src={imageUrl}
+        alt="Assistant output"
+        className="h-auto w-full object-cover"
+      />
     </figure>
   );
 }
@@ -133,38 +198,97 @@ function MemoryBlock({ content }: { content: TMessageContentMemory }) {
         <Badge variant="secondary">Memory</Badge>
       </CardHeader>
       <CardContent className="text-xs text-muted-foreground">
-        <pre className="whitespace-pre-wrap wrap-break-word">{safeJson(content.data ?? [])}</pre>
+        <pre className="whitespace-pre-wrap wrap-break-word">
+          {safeJson(content.data ?? [])}
+        </pre>
       </CardContent>
     </Card>
   );
 }
 
-/** Partial step data: during streaming, fields arrive incrementally */
-type PartialStepData = Partial<TMessageComponentStep & { category?: string }>;
+function parseStepDate(value: unknown): number | null {
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    return Number.isNaN(timestamp) ? null : timestamp;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function formatStepDuration(durationMs: number): string {
+  if (durationMs < 1_000) {
+    return `${durationMs}ms`;
+  }
+
+  if (durationMs < 10_000) {
+    return `${(durationMs / 1_000).toFixed(1)}s`;
+  }
+
+  if (durationMs < 60_000) {
+    return `${Math.round(durationMs / 1_000)}s`;
+  }
+
+  const hours = Math.floor(durationMs / 3_600_000);
+  const minutes = Math.floor((durationMs % 3_600_000) / 60_000);
+  const seconds = Math.floor((durationMs % 60_000) / 1_000);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
 
 function ComponentBlock({ content }: { content: TMessageContentComponent }) {
+  const { i18n } = useChatkitTranslation();
   const [isExpanded, setIsExpanded] = React.useState(false);
   const contentRef = React.useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = React.useRef(true);
   const previousScrollTopRef = React.useRef(0);
+  const [durationNow, setDurationNow] = React.useState(() => Date.now());
 
-  const data = (content.data ?? {}) as PartialStepData;
+  const data = getToolStepData(content);
   const category = data.category ?? 'Component';
-  const title =
-    data.tool && category === 'Tool'
-      ? data.tool
-      : data.title ?? data.type ?? 'Component';
+  const title = getToolActivityLabel(content, i18n.language);
   const status = data.status ?? null;
   const message = data.message ?? null;
   const output = data.output ?? null;
   const error = data.error ?? null;
-  const fallback = message ?? output ?? safeJson(data.data ?? data);
+  const fallback = message ?? output ?? data.data ?? data;
   const hasOutput = message !== null || output !== null;
+  const createdAt = parseStepDate(data.created_date);
+  const endedAt = parseStepDate(data.end_date);
+  const durationMs =
+    createdAt === null
+      ? null
+      : Math.max(0, (endedAt ?? durationNow) - createdAt);
+  const durationLabel =
+    durationMs === null ? null : formatStepDuration(durationMs);
 
   // Auto-expand when running with output available
   React.useEffect(() => {
     if (status === 'running' && output !== null) setIsExpanded(true);
   }, [status, output]);
+
+  React.useEffect(() => {
+    if (status !== 'running' || createdAt === null || endedAt !== null) {
+      return;
+    }
+
+    setDurationNow(Date.now());
+    const timer = window.setInterval(() => {
+      setDurationNow(Date.now());
+    }, 100);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [createdAt, endedAt, status]);
 
   React.useEffect(() => {
     const element = contentRef.current;
@@ -186,7 +310,9 @@ function ComponentBlock({ content }: { content: TMessageContentComponent }) {
     };
 
     updateAutoScrollState();
-    element.addEventListener('scroll', updateAutoScrollState, { passive: true });
+    element.addEventListener('scroll', updateAutoScrollState, {
+      passive: true,
+    });
 
     return () => {
       element.removeEventListener('scroll', updateAutoScrollState);
@@ -207,40 +333,69 @@ function ComponentBlock({ content }: { content: TMessageContentComponent }) {
     element.scrollTop = element.scrollHeight;
   }, [isExpanded, output, status]);
 
-  const config = status ? statusConfig[status] : null;
+  const config = status ? toolStatusConfig[status] : null;
   const StatusIcon = config?.icon;
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 px-2 py-1 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+      <CardHeader
+        className="flex flex-row items-center justify-between gap-2 px-2 py-1 cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
         <div className="flex items-center space-x-1 flex-1 min-w-0">
           {status && StatusIcon && (
-            <StatusIcon className={cn("h-4 w-4", config?.iconClass, status === 'running' && "animate-spin")} />
+            <StatusIcon
+              className={cn(
+                'h-4 w-4',
+                config?.iconClass,
+                status === 'running' && 'animate-spin',
+              )}
+            />
           )}
           <CardTitle className="text-sm truncate">{title}</CardTitle>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <Badge variant="secondary" className="rounded-lg px-1.5">{category}</Badge>
+          {durationLabel && (
+            <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+              <Clock3 className="h-3 w-3" />
+              <span>{durationLabel}</span>
+            </div>
+          )}
+          <Badge variant="secondary" className="rounded-lg px-1.5">
+            {category}
+          </Badge>
           <button
             className="text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={isExpanded ? "Collapse" : "Expand"}
+            aria-label={isExpanded ? 'Collapse' : 'Expand'}
           >
             <ChevronDown
-              className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")}
+              className={cn(
+                'h-4 w-4 transition-transform',
+                isExpanded && 'rotate-180',
+              )}
             />
           </button>
         </div>
       </CardHeader>
       {isExpanded && (
-        <CardContent ref={contentRef} className="text-xs text-muted-foreground max-h-60 overflow-auto">
+        <CardContent
+          ref={contentRef}
+          className="text-xs text-muted-foreground max-h-60 overflow-auto"
+        >
           {data.input && (
-            <pre className="whitespace-pre-wrap wrap-break-word">{JSON.stringify(data.input, null, 2)}</pre>
+            <pre className="whitespace-pre-wrap wrap-break-word">
+              {formatDisplayValue(data.input)}
+            </pre>
           )}
           {error ? (
-            <pre className="whitespace-pre-wrap wrap-break-word text-destructive">{typeof error === 'string' ? error : safeJson(error)}</pre>
+            <pre className="whitespace-pre-wrap wrap-break-word text-destructive">
+              {formatDisplayValue(error)}
+            </pre>
           ) : (
             hasOutput && (
-              <pre className="whitespace-pre-wrap wrap-break-word">{fallback}</pre>
+              <pre className="whitespace-pre-wrap wrap-break-word">
+                {formatDisplayValue(fallback)}
+              </pre>
             )
           )}
         </CardContent>
@@ -257,7 +412,9 @@ function UnknownBlock({ content }: { content: TMessageContentComplex }) {
         <Badge variant="outline">{content.type ?? 'unknown'}</Badge>
       </CardHeader>
       <CardContent className="text-xs text-muted-foreground">
-        <pre className="whitespace-pre-wrap break-words">{safeJson(content)}</pre>
+        <pre className="whitespace-pre-wrap break-words">
+          {safeJson(content)}
+        </pre>
       </CardContent>
     </Card>
   );
@@ -266,16 +423,38 @@ function UnknownBlock({ content }: { content: TMessageContentComplex }) {
 function renderContentItem(
   content: TMessageContentComplex | string,
   index: number,
-  messageId: string,
+  message: ChatkitMessage,
+  lookupMessages: ChatkitMessage[],
+  options?: {
+    isThreadRunning?: boolean;
+    organizationId?: string;
+    apiUrl?: string;
+    isAgentOutput?: boolean;
+  },
 ): React.ReactNode {
+  const messageId = message.id;
+  const textClassName = options?.isAgentOutput
+    ? 'text-sm [&_.markdown-content_p]:!leading-6'
+    : undefined;
+
   if (typeof content === 'string') {
-    return <div key={`text-${index}`}>
-      <MarkdownText>{content}</MarkdownText>;
-    </div>;
+    return (
+      <div key={`text-${index}`} className={textClassName}>
+        <MarkdownText>{content}</MarkdownText>
+      </div>
+    );
+  }
+
+  if (isThreadContextUsageRenderArtifact(content)) {
+    return null;
   }
 
   if (isTextContent(content)) {
-    return <div key={content.id ?? `text-${index}`}><MarkdownText>{content.text}</MarkdownText></div>;
+    return (
+      <div key={content.id ?? `text-${index}`} className={textClassName}>
+        <MarkdownText>{content.text}</MarkdownText>
+      </div>
+    );
   }
 
   if (isReasoningContent(content)) {
@@ -295,10 +474,58 @@ function renderContentItem(
   }
 
   if (isComponentContent(content)) {
+    if (isContextCompressionComponent(content)) {
+      return (
+        <div
+          key={content.id ?? `context-compression-${index}`}
+          className="w-full"
+        >
+          <ContextCompressionMessage content={content} />
+        </div>
+      );
+    }
+
+    const requestUserInputResult = getRequestUserInputResultCardData(
+      content,
+      lookupMessages,
+    );
+    if (requestUserInputResult) {
+      return (
+        <div key={content.id ?? `request-user-input-result-${index}`}>
+          <RequestUserInputResultCard result={requestUserInputResult} />
+        </div>
+      );
+    }
+
     if (isWidgetComponent(content)) {
       return (
         <div key={content.id ?? `widget-${index}`}>
           <WidgetMessage messageId={messageId} data={content.data} />
+        </div>
+      );
+    }
+
+    if (isMcpAppComponent(content)) {
+      return (
+        <div key={content.id ?? `mcp-app-${index}`}>
+          <McpAppMessage messageId={messageId} data={content.data} />
+        </div>
+      );
+    }
+
+    if (
+      getComponentMessagePresentation(content, getToolStepData(content)) ===
+      'grouped-step'
+    ) {
+      return (
+        <div key={content.id ?? `component-group-${index}`}>
+          <ToolComponentGroup
+            items={[content]}
+            hasFollowingItem={false}
+            isThreadRunning={options?.isThreadRunning}
+            organizationId={options?.organizationId}
+            apiUrl={options?.apiUrl}
+          />
         </div>
       );
     }
@@ -318,6 +545,14 @@ function renderContentItem(
     );
   }
 
+  if (isAgentEventContent(content)) {
+    return (
+      <div key={content.id ?? `agent-event-${index}`}>
+        <AgentEventRow content={content} />
+      </div>
+    );
+  }
+
   return (
     <div key={content.id ?? `unknown-${index}`}>
       <UnknownBlock content={content} />
@@ -325,7 +560,162 @@ function renderContentItem(
   );
 }
 
-function renderContent(content: ChatkitMessage['content'] | any, messageId: string) {
+function renderContentUnit(
+  unit: ToolComponentRenderUnit,
+  message: ChatkitMessage,
+  lookupMessages: ChatkitMessage[],
+  hasFollowingItem: boolean,
+  options?: {
+    isThreadRunning?: boolean;
+    organizationId?: string;
+    apiUrl?: string;
+    isAgentOutput?: boolean;
+  },
+): React.ReactNode {
+  if (unit.type === 'item') {
+    return renderContentItem(unit.item, unit.index, message, lookupMessages, {
+      isThreadRunning: options?.isThreadRunning,
+      organizationId: options?.organizationId,
+      apiUrl: options?.apiUrl,
+      isAgentOutput: options?.isAgentOutput,
+    });
+  }
+
+  return (
+    <div key={`tool-group-${unit.startIndex}-${unit.items[0]?.id ?? 'tool'}`}>
+      <ToolComponentGroup
+        items={unit.items}
+        hasFollowingItem={hasFollowingItem}
+        isThreadRunning={options?.isThreadRunning}
+        organizationId={options?.organizationId}
+        apiUrl={options?.apiUrl}
+      />
+    </div>
+  );
+}
+
+function renderEntryBatch(
+  entries: AssistantContentEntry[],
+  message: ChatkitMessage,
+  lookupMessages: ChatkitMessage[],
+  hasFollowingItem: boolean,
+  options?: {
+    isThreadRunning?: boolean;
+    organizationId?: string;
+    apiUrl?: string;
+    isAgentOutput?: boolean;
+  },
+) {
+  if (entries.length === 0) return null;
+
+  const renderUnits = buildToolComponentRenderUnits(
+    entries.map((entry) => entry.item),
+    {
+      shouldGroupComponent: (item) =>
+        getRequestUserInputResultCardData(item, lookupMessages) === null &&
+        !isMcpAppComponent(item),
+    },
+  );
+
+  return renderUnits.map((unit, index) =>
+    renderContentUnit(
+      unit,
+      message,
+      lookupMessages,
+      index < renderUnits.length - 1 || hasFollowingItem,
+      options,
+    ),
+  );
+}
+
+function renderAssistantRenderUnits(
+  units: AssistantRenderUnit[],
+  message: ChatkitMessage,
+  lookupMessages: ChatkitMessage[],
+  options?: {
+    isThreadRunning?: boolean;
+    organizationId?: string;
+    apiUrl?: string;
+    isAgentOutput?: boolean;
+  },
+  depth = 0,
+) {
+  const rendered: React.ReactNode[] = [];
+  let entryBatch: AssistantContentEntry[] = [];
+
+  const flushEntries = (hasFollowingItem: boolean) => {
+    if (entryBatch.length === 0) return;
+    const batch = entryBatch;
+    entryBatch = [];
+    rendered.push(
+      <React.Fragment key={`entries-${batch[0]?.order ?? rendered.length}`}>
+        {renderEntryBatch(batch, message, lookupMessages, hasFollowingItem, {
+          ...options,
+          isAgentOutput: depth > 0,
+        })}
+      </React.Fragment>,
+    );
+  };
+
+  units.forEach((unit, index) => {
+    const hasFollowingItem = index < units.length - 1;
+    if (unit.type === 'entry') {
+      entryBatch.push(unit.entry);
+      if (!hasFollowingItem) {
+        flushEntries(false);
+      }
+      return;
+    }
+
+    flushEntries(true);
+    rendered.push(
+      <AgentRunGroup
+        key={unit.node.id}
+        node={unit.node}
+        hasFollowingItem={hasFollowingItem}
+        depth={depth}
+        renderUnits={(childUnits, nextDepth) =>
+          renderAssistantRenderUnits(
+            childUnits,
+            message,
+            lookupMessages,
+            options,
+            nextDepth,
+          )
+        }
+      />,
+    );
+  });
+
+  return rendered;
+}
+
+function renderContent(
+  message: ChatkitMessage,
+  lookupMessages: ChatkitMessage[],
+  options?: {
+    isThreadRunning?: boolean;
+    organizationId?: string;
+    apiUrl?: string;
+  },
+) {
+  const renderTree = buildAssistantRenderTree(
+    message as AssistantMessageWithAgentRuns,
+  );
+  if (renderTree.hasAgentRuns) {
+    return (
+      <div className={assistantMessageStackClassName}>
+        {renderAssistantRenderUnits(
+          renderTree.units,
+          message,
+          lookupMessages,
+          options,
+        )}
+      </div>
+    );
+  }
+
+  const content = message.content;
   if (typeof content === 'string') {
     if (!content.trim()) return null;
     return <MarkdownText>{content}</MarkdownText>;
@@ -333,34 +723,123 @@ function renderContent(content: ChatkitMessage['content'] | any, messageId: stri
 
   if (!Array.isArray(content) || content.length === 0) return null;
 
+  const renderUnits = buildToolComponentRenderUnits(content, {
+    shouldGroupComponent: (item) =>
+      getRequestUserInputResultCardData(item, lookupMessages) === null &&
+      !isMcpAppComponent(item),
+  });
+
   return (
     <div className="space-y-3">
-      {content.map((item, index) => renderContentItem(item, index, messageId))}
+      {renderUnits.map((unit, index) =>
+        renderContentUnit(
+          unit,
+          message,
+          lookupMessages,
+          index < renderUnits.length - 1,
+          options,
+        ),
+      )}
     </div>
   );
 }
 
-export function AssistantMessage({ message, className, isStreaming = false }: AssistantMessageProps) {
+export function AssistantStreamingIndicator({
+  status,
+  className,
+}: {
+  status: AssistantStreamingStatus;
+  className?: string;
+}) {
   const { t } = useChatkitTranslation();
-  const content = message.content as any;
-  const hasContent = content != null &&
-    !(
-      (typeof content === 'string' && content.trim() === '') ||
-      (Array.isArray(message.content) && message.content.length === 0)
-    );
-  const hasReasoning =
-    Array.isArray(message.reasoning) &&
-    message.reasoning.some((item) => item.text?.trim());
+  const labelMap: Record<AssistantStreamingStatus, string> = {
+    loading: t('message.loading'),
+    thinking: t('message.thinking'),
+    answering: t('message.answering'),
+  };
 
-  const answerNode = renderContent(message.content, message.id);
-  const reasoningNode = hasReasoning ? (
-    <ReasoningBlock reasoning={message.reasoning ?? []} />
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 text-xs text-muted-foreground',
+        className,
+      )}
+    >
+      {status === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {status === 'thinking' && (
+        <div className="flex items-end gap-1" aria-hidden="true">
+          <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:-0.3s]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:-0.15s]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce" />
+        </div>
+      )}
+      {status === 'answering' && (
+        <div className="flex items-end gap-1" aria-hidden="true">
+          <span className="h-2 w-0.5 rounded-full bg-current animate-pulse [animation-delay:-0.25s]" />
+          <span className="h-3 w-0.5 rounded-full bg-current animate-pulse [animation-delay:-0.1s]" />
+          <span className="h-2.5 w-0.5 rounded-full bg-current animate-pulse" />
+        </div>
+      )}
+      <span>{labelMap[status]}</span>
+    </div>
+  );
+}
+
+export function AssistantMessage({
+  message,
+  messages,
+  className,
+  isStreaming = false,
+  streamingStatus,
+  isThreadRunning,
+  organizationId,
+  apiUrl,
+  pet,
+}: AssistantMessageProps) {
+  const { t } = useChatkitTranslation();
+  const renderTree = buildAssistantRenderTree(
+    message as AssistantMessageWithAgentRuns,
+  );
+  const rootReasoning = renderTree.hasAgentRuns
+    ? renderTree.rootReasoning
+    : message.reasoning;
+  const hasContent =
+    hasRenderableMessageContent(message.content) || renderTree.hasAgentRuns;
+  const hasReasoning = hasRenderableReasoning(rootReasoning);
+  const resolvedStreamingStatus =
+    streamingStatus ?? getAssistantStreamingStatus(message, isStreaming);
+  const lookupMessages = messages?.length ? messages : [message];
+  const inlinePetState = resolvedStreamingStatus
+    ? getInlinePetState(resolvedStreamingStatus)
+    : null;
+  const inlinePet = inlinePetState ? (
+    <InlinePetStatus pet={pet} state={inlinePetState} />
   ) : null;
 
-  if (!hasContent && !hasReasoning) return null;
+  const answerNode = renderContent(message, lookupMessages, {
+    isThreadRunning,
+    organizationId,
+    apiUrl,
+  });
+  const reasoningNode = hasReasoning ? (
+    <ReasoningBlock reasoning={rootReasoning ?? []} />
+  ) : null;
+
+  if (!hasContent && !hasReasoning && !resolvedStreamingStatus) return null;
 
   // Streaming class for smooth animation effect
   const streamingClass = isStreaming ? 'streaming-active' : '';
+
+  if (!hasContent && !hasReasoning && resolvedStreamingStatus) {
+    return (
+      <div className={cn('space-y-3', streamingClass, className)}>
+        <div className="flex items-center gap-2">
+          {inlinePet}
+          <AssistantStreamingIndicator status={resolvedStreamingStatus} />
+        </div>
+      </div>
+    );
+  }
 
   if (hasContent && hasReasoning) {
     return (
@@ -369,10 +848,15 @@ export function AssistantMessage({ message, className, isStreaming = false }: As
           defaultValue={message.status === 'reasoning' ? 'reasoning' : 'answer'}
           className="w-full"
         >
-          <TabsList className="h-9">
-            <TabsTrigger value="answer">{t('message.answer')}</TabsTrigger>
-            <TabsTrigger value="reasoning">{t('message.reasoning')}</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center gap-2">
+            {inlinePet}
+            <TabsList className="">
+              <TabsTrigger value="answer">{t('message.answer')}</TabsTrigger>
+              <TabsTrigger value="reasoning">
+                {t('message.reasoning')}
+              </TabsTrigger>
+            </TabsList>
+          </div>
           <TabsContent value="answer" className="space-y-3">
             {answerNode}
           </TabsContent>
@@ -380,6 +864,9 @@ export function AssistantMessage({ message, className, isStreaming = false }: As
             {reasoningNode}
           </TabsContent>
         </Tabs>
+        {resolvedStreamingStatus ? (
+          <AssistantStreamingIndicator status={resolvedStreamingStatus} />
+        ) : null}
       </div>
     );
   }
@@ -387,6 +874,12 @@ export function AssistantMessage({ message, className, isStreaming = false }: As
   return (
     <div className={cn('space-y-3', streamingClass, className)}>
       {hasReasoning ? reasoningNode : answerNode}
+      {resolvedStreamingStatus ? (
+        <div className="flex items-center gap-2">
+          {inlinePet}
+          <AssistantStreamingIndicator status={resolvedStreamingStatus} />
+        </div>
+      ) : null}
     </div>
   );
 }

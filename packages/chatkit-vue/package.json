@@ -1,6 +1,6 @@
 {
   "name": "@xpert-ai/chatkit-vue",
-  "version": "0.0.2",
+  "version": "0.4.0",
   "description": "Vue bindings for Xpert Chatkit",
   "type": "module",
   "sideEffects": false,
@@ -39,5 +39,13 @@
     "vue",
     "xpert",
     "uniapp"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/chatkit-vue",
+    "type": "git",
+    "url": "https://github.com/xpert-ai/chatkit-js"
+  }
 }

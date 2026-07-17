@@ -4,19 +4,21 @@ import { A2UIProvider } from "@xpert-ai/a2ui-react";
 import { Chat } from "./components/chat";
 import { StreamProvider } from "./providers/Stream";
 import { ThemeProvider } from "./providers/Theme";
-import { setLanguage } from "./i18n";
+import { getLanguage, setLanguage } from "./i18n";
 import { useParentMessenger } from './hooks/useParentMessenger';
 
 export type AppProps = {
   options?: ChatKitOptions | null;
   clientSecret: string;
   organizationId?: string;
+  resolvedXpertId?: string;
   isClientSecretInitializing?: boolean;
 };
 
 export function App({
   clientSecret,
   organizationId,
+  resolvedXpertId,
   options,
   isClientSecretInitializing = false,
 }: AppProps) {
@@ -28,6 +30,7 @@ export function App({
   // Extract options
   const theme = options?.theme;
   const locale = options?.locale;
+  const requestLocale = locale ?? getLanguage();
 
   React.useEffect(() => {
     if (!locale) return;
@@ -44,7 +47,9 @@ export function App({
             apiKey={apiKey}
             organizationId={organizationId}
             apiUrl={options?.api.apiUrl || apiUrl}
-            xpertId={options?.api.xpertId || xpertId}
+            xpertId={options?.api.xpertId || resolvedXpertId || xpertId}
+            initialThread={options?.initialThread ?? null}
+            locale={requestLocale}
           >
             <Chat
               className="flex-1"

@@ -1,16 +1,39 @@
-import type { ChatKitOptions } from "./options";
+import type {
+  ChatKitReference,
+  ChatKitReferenceCompositionMode,
+  RuntimeCapabilitiesSelection,
+} from './message';
+import type { ChatKitOptions, FollowUpBehavior } from './options';
+
+export type UserMessageContent = unknown;
+export type ToolChoice = unknown;
+export type WorkflowTriggerParams =
+  | {
+      name?: string;
+      params?: Record<string, any>;
+    }
+  | Record<string, any>;
 
 export type EventHandler<K extends keyof ChatKitEvents> = (
   event: ChatKitEvents[K],
 ) => any;
 
 export type SendUserMessageParams = {
-  text: string;
+  text?: string;
+  content?: UserMessageContent[];
   state?: Record<string, any>;
   reply?: string;
   attachments?: Attachment[];
   newThread?: boolean;
-}
+  references?: ChatKitReference[];
+  referenceComposition?: ChatKitReferenceCompositionMode;
+  toolChoice?: ToolChoice;
+  model?: string;
+  planMode?: boolean;
+  runtimeCapabilities?: RuntimeCapabilitiesSelection;
+  trigger?: WorkflowTriggerParams;
+  followUpMode?: 'default' | FollowUpBehavior;
+};
 
 /**
  * strategies to host files before attaching them to messages.
@@ -93,10 +116,21 @@ export interface XpertAIChatKit extends HTMLElement {
 
   /** Sets the composer's content without sending a message. */
   setComposerValue(params: {
-    text: string;
+    text?: string;
     reply?: string;
     attachments?: Attachment[];
+    references?: ChatKitReference[];
+    appendReferences?: boolean;
+    selectedToolId?: string | null;
+    selectedModelId?: string | null;
+    runtimeCapabilities?: RuntimeCapabilitiesSelection | null;
+    insertRuntimeCapabilities?: boolean;
   }): Promise<void>;
+
+  /** Sets the selected runtime capabilities for the next user message without sending it. */
+  setRuntimeCapabilities(
+    selection: RuntimeCapabilitiesSelection | null,
+  ): Promise<void>;
 
   /**
    * Manually fetches updates from the server.

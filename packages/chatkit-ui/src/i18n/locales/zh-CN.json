@@ -5,12 +5,52 @@
     "statusOnline": "在线",
     "missingConfigShort": "缺少 ChatKit 配置。",
     "missingConfigDetail": "缺少 ChatKit 配置。请检查 `VITE_XPERTAI_API_URL` 和 `clientSecret` 参数。",
+    "missingApiUrlShort": "缺少 ChatKit API URL。",
+    "missingApiUrlDetail": "缺少 ChatKit API URL。请检查 `VITE_XPERTAI_API_URL` 或 `options.api.apiUrl`。",
+    "missingClientSecretShort": "缺少 ChatKit client secret。",
+    "missingClientSecretDetail": "缺少 ChatKit client secret。请检查 `clientSecret` 参数或 `api.getClientSecret` 集成。",
+    "missingApiUrlAndClientSecretShort": "缺少 ChatKit API URL 和 client secret。",
+    "missingApiUrlAndClientSecretDetail": "缺少 ChatKit API URL 和 client secret。请检查 `VITE_XPERTAI_API_URL`、`options.api.apiUrl` 以及 client secret 集成。",
     "loadingThread": "正在加载线程...",
     "stop": "停止",
     "send": "发送消息",
+    "minimizeToPet": "最小化到 Pet",
+    "referencedContentOnly": "已引用内容",
+    "youLabel": "你",
     "scrollToBottom": "回到底部",
+    "loadMoreMessages": "加载更多",
+    "loadingMoreMessages": "正在加载...",
     "retryUpload": "重新上传",
+    "dropFilesTitle": "松手上传文件",
+    "dropFilesHint": "文件会附加到你的下一条消息。",
+    "attachmentStatus": {
+      "uploaded": "已上传",
+      "scanning": "扫描中",
+      "parsing": "解析中",
+      "ready": "已就绪",
+      "partial": "部分就绪",
+      "failed": "解析失败"
+    },
     "poweredBy": "由 Xpert AI 驱动",
+    "followUps": {
+      "pending": "待处理 Follow-up",
+      "queue": "排队",
+      "steerAction": "引导",
+      "sendNow": "立即发送",
+      "remove": "移除此待处理 Follow-up",
+      "more": "更多操作",
+      "edit": "编辑消息",
+      "queueHint": "当前运行结束后开启下一轮",
+      "manualQueueHint": "保留为待发送，可手动开启新一轮",
+      "steerHint": "当前工具调用完成后注入"
+    },
+    "todos": {
+      "summary": "共 {{total}} 个任务，已经完成 {{completed}} 个"
+    },
+    "runtimeServices": {
+      "summary": "正在运行 {{count}} 个服务",
+      "stop": "停止服务"
+    },
     "errors": {
       "loadMessages": "加载线程消息失败",
       "createThread": "创建线程失败",
@@ -20,6 +60,27 @@
       "label": "上下文窗口",
       "full": "已使用 {{usedPercent}}%（剩余 {{remainingPercent}}%）",
       "tokensUsed": "已使用 {{used}} / {{max}} tokens"
+    },
+    "goal": {
+      "label": "目标",
+      "unavailable": "当前客户端不支持目标控制。",
+      "startThreadRequired": "请先开始一个会话再修改目标。",
+      "elapsed": "已运行 {{elapsed}}",
+      "edit": "编辑目标",
+      "pause": "暂停目标",
+      "resume": "恢复目标",
+      "clear": "清除目标",
+      "hide": "隐藏目标",
+      "expandObjective": "显示完整目标",
+      "collapseObjective": "隐藏完整目标",
+      "status": {
+        "active": "运行中",
+        "paused": "已暂停",
+        "blocked": "已阻塞",
+        "usage_limited": "用量受限",
+        "budget_limited": "预算耗尽",
+        "complete": "已完成"
+      }
     }
   },
   "history": {
@@ -37,17 +98,192 @@
     "regenerate": "重新生成回复"
   },
   "startScreen": {
-    "greeting": "今天我能帮你什么？"
+    "greeting": "今天我能帮你什么？",
+    "editPrompt": "编辑常用问题"
   },
   "composer": {
     "openMenu": "打开菜单",
-    "addAttachment": "添加附件"
+    "addAttachment": "添加附件",
+    "planMode": "计划模式",
+    "capabilities": {
+      "title": "技能和插件",
+      "skills": "技能",
+      "plugins": "插件",
+      "subAgents": "子智能体",
+      "runOnly": "本次运行",
+      "removeRunCapability": "移除能力",
+      "emptySearch": "没有匹配的技能、插件或子智能体",
+      "agent": "智能体",
+      "xpertAgent": "Xpert",
+      "agentDetails": "智能体详情",
+      "type": "类型",
+      "identifier": "ID",
+      "inputs": "输入",
+      "tools": "工具",
+      "toolsets": "工具集",
+      "knowledge": "知识库"
+    },
+    "slashCommands": {
+      "commands": {
+        "plan": {
+          "label": "计划",
+          "description": "切换计划模式",
+          "argsHint": "[提示词]"
+        },
+        "skills": {
+          "label": "技能",
+          "description": "显示运行时技能"
+        },
+        "plugins": {
+          "label": "插件",
+          "description": "显示运行时插件"
+        },
+        "subagents": {
+          "label": "子智能体",
+          "description": "显示运行时子智能体"
+        },
+        "pet": {
+          "label": "Pet",
+          "description": "切换 Pet",
+          "argsHint": "[on|off|settings]"
+        }
+      },
+      "empty": {
+        "loadingCapabilities": "正在加载运行时能力...",
+        "skills": "没有可添加的技能",
+        "plugins": "没有可添加的插件",
+        "subAgents": "没有可添加的子智能体",
+        "matchingSkills": "没有匹配的可添加技能",
+        "matchingPlugins": "没有匹配的可添加插件",
+        "matchingSubAgents": "没有匹配的可添加子智能体"
+      }
+    },
+    "planModeActive": "计划",
+    "disablePlanMode": "关闭计划模式",
+    "removeReference": "移除引用",
+    "quoteSelection": "引用选中内容",
+    "requestUserInput": {
+      "title": "需要你的输入",
+      "recommended": "推荐",
+      "other": "其他",
+      "otherPlaceholder": "输入自定义回答",
+      "continue": "继续",
+      "dismiss": "关闭",
+      "previousQuestion": "上一个问题",
+      "nextQuestion": "下一个问题",
+      "questionProgress": "{{current}} / {{total}}",
+      "optionInfo": "{{label}} 的说明",
+      "submit": "继续"
+    },
+    "hitl": {
+      "title": "操作审核",
+      "actionProgress": "{{current}} / {{total}}",
+      "previousAction": "上一个操作",
+      "nextAction": "下一个操作",
+      "arguments": "参数",
+      "approve": "批准",
+      "edit": "编辑",
+      "reject": "拒绝",
+      "respond": "回复",
+      "rejectMessage": "给智能体的反馈",
+      "respondMessage": "回复智能体",
+      "rejectPlaceholder": "说明为什么不应执行此操作",
+      "respondPlaceholder": "告诉智能体下一步该怎么做",
+      "invalidJson": "参数必须是有效的 JSON 对象",
+      "responseRequired": "需要填写回复内容",
+      "dismiss": "关闭",
+      "submit": "确认"
+    }
+  },
+  "settings": {
+    "open": "设置",
+    "title": "设置"
+  },
+  "pet": {
+    "settings": {
+      "title": "Pet",
+      "description": "仅保存在当前浏览器。",
+      "enabled": "启用 Pet",
+      "requiredHint": "Pet launcher 模式下必须开启。",
+      "characterType": "形象",
+      "characterTypes": {
+        "builtin": "内置",
+        "atlas": "Spritesheet URL"
+      },
+      "builtin": "内置 Pet",
+      "builtins": {
+        "batmeme": "Batmeme",
+        "boba": "Boba",
+        "bolt": "Bolt",
+        "einstein": "Einstein",
+        "lando-2": "Lando",
+        "mini-sama": "Mini Sama",
+        "miso": "Miso",
+        "noir-webling": "Noir Webling",
+        "nukey": "Nukey",
+        "steve": "Steve"
+      },
+      "atlasUrl": "Spritesheet URL",
+      "scale": "缩放",
+      "draggable": "允许拖拽",
+      "persistPosition": "记住位置",
+      "cancel": "取消",
+      "save": "保存"
+    }
   },
   "sheet": {
     "close": "关闭"
   },
   "markdown": {
-    "copy": "复制"
+    "copy": "复制",
+    "plan": {
+      "title": "Plan",
+      "expand": "展开计划",
+      "collapse": "折叠计划",
+      "download": "下载 Markdown"
+    },
+    "mermaid": {
+      "title": "Mermaid",
+      "diagram": "图表",
+      "code": "代码",
+      "download": "下载 SVG",
+      "fullScreen": "全屏查看",
+      "rendering": "正在渲染图表",
+      "failed": "图表渲染失败"
+    }
+  },
+  "taskSummary": {
+    "title": "任务摘要",
+    "description": "当前任务、产出、来源、运行中服务、Agent 活动和待处理请求。",
+    "open": "打开任务摘要",
+    "empty": "任务活动会显示在这里。",
+    "historyError": "部分历史摘要加载失败，实时活动仍可使用。",
+    "retry": "重试",
+    "viewAll": "查看全部",
+    "loadMore": "加载更多",
+    "collapse": "收起",
+    "createOutput": "创建文件或站点",
+    "addOutput": "创建产出",
+    "addSource": "添加来源",
+    "sections": {
+      "task": "任务",
+      "outputs": "产出",
+      "sources": "来源",
+      "running": "运行中",
+      "agents": "Agent 活动",
+      "pending": "待处理"
+    },
+    "status": {
+      "pending": "待处理",
+      "in_progress": "进行中",
+      "completed": "已完成"
+    },
+    "pending": {
+      "approval": "需要审批",
+      "userInput": "需要输入",
+      "followUp": "等待发送的跟进消息",
+      "steer": "等待发送的引导消息"
+    }
   },
   "thread": {
     "errorToast": "发生错误，请重试。",
@@ -56,6 +292,148 @@
   },
   "message": {
     "answer": "回答",
-    "reasoning": "推理"
+    "reasoning": "推理",
+    "loading": "正在加载",
+    "thinking": "正在思考",
+    "answering": "正在生成",
+    "navigation": {
+      "label": "消息导航",
+      "system": "系统",
+      "tool": "工具",
+      "event": "事件",
+      "message": "消息",
+      "image": "图片",
+      "memory": "记忆",
+      "widget": "组件",
+      "mcpApp": "MCP App",
+      "attachment": "附件",
+      "reference": "引用",
+      "capability": "能力",
+      "moreTags": "+{{count}}"
+    },
+    "mcpApp": {
+      "loading": "正在加载 MCP App"
+    },
+    "contextCompression": {
+      "running": "正在自动压缩上下文",
+      "success": "上下文已自动压缩",
+      "skipped": "上下文无需压缩",
+      "fail": "上下文压缩失败"
+    },
+    "requestUserInputResult": {
+      "title": "已确认选择",
+      "option": "选项",
+      "other": "其他"
+    },
+    "knowledgeRetriever": {
+      "queryTitle": "查询",
+      "resultsTitle": "检索结果（{{count}}）",
+      "rawDataTitle": "原始数据",
+      "noResults": "未找到知识结果",
+      "scoreLabel": "分数"
+    },
+    "agentRun": {
+      "defaultTitle": "子智能体",
+      "inputLabel": "输入",
+      "errorLabel": "错误",
+      "status": {
+        "running": "运行中",
+        "success": "已完成",
+        "error": "错误",
+        "replied": "已回复",
+        "pending": "等待中",
+        "interrupted": "已中断",
+        "timeout": "已超时"
+      },
+      "counts": {
+        "messages": {
+          "one": "{{count}} 条消息",
+          "other": "{{count}} 条消息"
+        },
+        "tools": {
+          "one": "{{count}} 个工具",
+          "other": "{{count}} 个工具"
+        },
+        "events": {
+          "one": "{{count}} 个事件",
+          "other": "{{count}} 个事件"
+        },
+        "children": {
+          "one": "{{count}} 个子智能体",
+          "other": "{{count}} 个子智能体"
+        }
+      }
+    },
+    "middlewareEvent": {
+      "title": {
+        "default": "中间件",
+        "ModelFallbackMiddleware": "模型回退",
+        "ModelRetryMiddleware": "模型重试"
+      },
+      "phase": {
+        "fallback_started": "正在尝试备用模型 {{attempt}}/{{total}}",
+        "fallback_succeeded": "备用模型调用成功 {{attempt}}/{{total}}",
+        "fallback_failed": "备用模型调用失败 {{attempt}}/{{total}}",
+        "retry_scheduled": "准备重试模型调用 {{attempt}}/{{total}}",
+        "retry_started": "正在重试模型调用 {{attempt}}/{{total}}",
+        "retry_succeeded": "模型重试成功 {{attempt}}/{{total}}",
+        "retry_failed": "模型重试失败 {{attempt}}/{{total}}"
+      }
+    },
+    "toolGroup": {
+      "status": {
+        "running": "正在处理",
+        "success": "已处理",
+        "fail": "处理失败"
+      },
+      "inputTitle": "输入",
+      "outputTitle": "输出",
+      "errorTitle": "错误",
+      "jsonTitle": "JSON",
+      "jsonTree": "树形",
+      "jsonRaw": "原始",
+      "sourcesTitle": "信息源",
+      "copy": "复制",
+      "copied": "已复制",
+      "separator": "，",
+      "shell": {
+        "success": "成功",
+        "running": "运行中",
+        "failed": "失败",
+        "exitCode": "退出码 {{code}}",
+        "ranCommand": "已运行 {{command}}",
+        "runningCommand": "正在运行 {{command}}"
+      },
+      "categories": {
+        "files": {
+          "one": "{{count}} 个文件",
+          "other": "{{count}} 个文件"
+        },
+        "searches": {
+          "one": "{{count}} 个搜索",
+          "other": "{{count}} 个搜索"
+        },
+        "commands": {
+          "one": "{{count}} 个命令",
+          "other": "{{count}} 个命令"
+        },
+        "lists": {
+          "one": "{{count}} 个列表",
+          "other": "{{count}} 个列表"
+        },
+        "tasks": {
+          "one": "{{count}} 个任务",
+          "other": "{{count}} 个任务"
+        },
+        "knowledges": {
+          "one": "{{count}} 个知识结果",
+          "other": "{{count}} 个知识结果"
+        },
+        "tools": {
+          "one": "{{count}} 个工具调用",
+          "other": "{{count}} 个工具调用"
+        }
+      }
+    }
   }
 }

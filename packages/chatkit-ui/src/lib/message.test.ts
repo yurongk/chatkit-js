@@ -1,0 +1,301 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  ASSISTANT_STREAM_IDLE_TO_THINKING_MS,
+  appendMessageContent,
+  filterInternalMessageContentArtifacts,
+  getAssistantStreamingStatus,
+  hasRenderableAssistantMessage,
+  hasRenderableMessageContent,
+  hasRenderableReasoning,
+} from './message';
+import { THREAD_CONTEXT_USAGE_EVENT_TYPE } from './thread-context-usage';
+
+describe('message visibility helpers', () => {
+  it('treats empty assistant placeholders as non-renderable', () => {
+    expect(
+      hasRenderableAssistantMessage({
+        content: '',
+        reasoning: undefined,
+      } as any),
+    ).toBe(false);
+
+    expect(
+      hasRenderableAssistantMessage({
+        content: [],
+        reasoning: [],
+      } as any),
+    ).toBe(false);
+  });
+
+  it('ignores empty text fragments inside content arrays', () => {
+    expect(
+      hasRenderableMessageContent([
+        { type: 'text', text: '   ' },
+      ] as any),
+    ).toBe(false);
+  });
+
+  it('keeps assistant messages renderable when they contain components or reasoning', () => {
+    expect(
+      hasRenderableAssistantMessage({
+        content: [{ type: 'component', data: { category: 'Tool' } }],
+        reasoning: undefined,
+      } as any),
+    ).toBe(true);
+
+    expect(
+      hasRenderableReasoning([{ type: 'reasoning', text: 'thinking' }] as any),
+    ).toBe(true);
+  });
+
+  it('ignores thread context usage artifacts when checking renderability', () => {
+    const usageArtifact = {
+      type: THREAD_CONTEXT_USAGE_EVENT_TYPE,
+      threadId: 'thread-1',
+      agentKey: 'agent-1',
+      usage: { totalTokens: 120 },
+    };
+
+    expect(hasRenderableMessageContent([usageArtifact] as any)).toBe(false);
+    expect(
+      hasRenderableMessageContent([
+        {
+          id: 'agent-event-1',
+          type: 'agent_event',
+          event: THREAD_CONTEXT_USAGE_EVENT_TYPE,
+        },
+      ] as any),
+    ).toBe(false);
+    expect(
+      hasRenderableMessageContent([
+        {
+          id: 'component-1',
+          type: 'component',
+          data: { type: THREAD_CONTEXT_USAGE_EVENT_TYPE },
+        },
+      ] as any),
+    ).toBe(false);
+    expect(
+      hasRenderableMessageContent([
+        usageArtifact,
+        { type: 'text', text: 'Visible output.' },
+      ] as any),
+    ).toBe(true);
+  });
+
+  it('removes thread context usage artifacts from content arrays', () => {
+    expect(
+      filterInternalMessageContentArtifacts([
+        {
+          id: 'component-1',
+          type: 'component',
+          data: { type: THREAD_CONTEXT_USAGE_EVENT_TYPE },
+        },
+        { type: 'text', text: 'Visible output.' },
+      ] as any),
+    ).toEqual([{ type: 'text', text: 'Visible output.' }]);
+  });
+
+  it('maps streaming assistant states to loading, thinking, and answering', () => {
+    expect(
+      getAssistantStreamingStatus({ status: undefined, reasoning: undefined } as any, true),
+    ).toBe('loading');
+
+    expect(
+      getAssistantStreamingStatus({ status: 'reasoning', reasoning: undefined } as any, true),
+    ).toBe('thinking');
+
+    expect(
+      getAssistantStreamingStatus({ status: 'answering', reasoning: undefined } as any, true),
+    ).toBe('answering');
+
+    expect(
+      getAssistantStreamingStatus({ status: 'answering', reasoning: undefined } as any, false),
+    ).toBeNull();
+  });
+
+  it('treats idle loading or answering streams as thinking after the timeout', () => {
+    const now = 10_000;
+    const lastStreamOutputAt = now - ASSISTANT_STREAM_IDLE_TO_THINKING_MS - 1;
+
+    expect(
+      getAssistantStreamingStatus(
+        {
+          status: undefined,
+          reasoning: undefined,
+          lastStreamOutputAt,
+        } as any,
+        true,
+        { now },
+      ),
+    ).toBe('thinking');
+
+    expect(
+      getAssistantStreamingStatus(
+        {
+          status: 'answering',
+          reasoning: undefined,
+          lastStreamOutputAt,
+        } as any,
+        true,
+        { now },
+      ),
+    ).toBe('thinking');
+  });
+
+  it('keeps recent answering streams in answering status before the idle timeout', () => {
+    const now = 10_000;
+    const lastStreamOutputAt = now - ASSISTANT_STREAM_IDLE_TO_THINKING_MS + 1;
+
+    expect(
+      getAssistantStreamingStatus(
+        {
+          status: 'answering',
+          reasoning: undefined,
+          lastStreamOutputAt,
+        } as any,
+        true,
+        { now },
+      ),
+    ).toBe('answering');
+  });
+
+  it('does not let previous reasoning override an active answering state', () => {
+    const now = 10_000;
+    const lastStreamOutputAt = now - 500;
+
+    expect(
+      getAssistantStreamingStatus(
+        {
+          status: 'answering',
+          reasoning: [{ type: 'reasoning', text: 'thinking' }],
+          lastStreamOutputAt,
+        } as any,
+        true,
+        { now },
+      ),
+    ).toBe('answering');
+  });
+});
+
+describe('appendMessageContent', () => {
+  it('does not append nested thread context usage artifacts', () => {
+    const message = {
+      id: 'assistant-1',
+      type: 'assistant',
+      content: [],
+    } as any;
+
+    appendMessageContent(message, {
+      id: 'component-1',
+      type: 'component',
+      data: {
+        type: THREAD_CONTEXT_USAGE_EVENT_TYPE,
+        title: 'Thread context usage',
+      },
+    } as any);
+
+    expect(message.content).toEqual([]);
+    expect(message.status).toBeUndefined();
+  });
+
+  it('preserves tool metadata when a component update arrives with the same id', () => {
+    const message = {
+      id: 'assistant-1',
+      type: 'assistant',
+      content: [
+        {
+          id: 'tool-1',
+          type: 'component',
+          agentKey: 'Agent_xSd1VKEicG',
+          data: {
+            category: 'Tool',
+            toolset: 'todoListMiddleware',
+            tool: 'write_todos',
+            title: 'write_todos',
+            message: 'Writing todos',
+            created_date: '2026-04-24T12:24:52.898Z',
+            status: 'running',
+            input: {
+              todos: [
+                {
+                  content: 'Query ontology structure',
+                  status: 'in_progress',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    } as any;
+
+    appendMessageContent(message, {
+      id: 'tool-1',
+      type: 'component',
+      data: {
+        status: 'success',
+        end_date: '2026-04-24T12:24:54.398Z',
+        message: 'write_todos',
+        output: 'Updated todo list',
+      },
+    } as any);
+
+    expect(message.content).toEqual([
+      expect.objectContaining({
+        id: 'tool-1',
+        type: 'component',
+        agentKey: 'Agent_xSd1VKEicG',
+        data: expect.objectContaining({
+          category: 'Tool',
+          toolset: 'todoListMiddleware',
+          tool: 'write_todos',
+          title: 'write_todos',
+          message: 'Writing todos',
+          created_date: '2026-04-24T12:24:52.898Z',
+          status: 'success',
+          end_date: '2026-04-24T12:24:54.398Z',
+          output: 'Updated todo list',
+        }),
+      }),
+    ]);
+  });
+
+  it('allows later component updates to replace non-generic tool messages', () => {
+    const message = {
+      id: 'assistant-1',
+      type: 'assistant',
+      content: [
+        {
+          id: 'tool-1',
+          type: 'component',
+          data: {
+            category: 'Tool',
+            tool: 'host_page_click',
+            title: 'host_page_click',
+            message: 'Click the Execute button',
+            status: 'running',
+          },
+        },
+      ],
+    } as any;
+
+    appendMessageContent(message, {
+      id: 'tool-1',
+      type: 'component',
+      data: {
+        message: 'Click the highlighted Execute button',
+        status: 'success',
+      },
+    } as any);
+
+    expect(message.content).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: 'Click the highlighted Execute button',
+          status: 'success',
+        }),
+      }),
+    ]);
+  });
+});
